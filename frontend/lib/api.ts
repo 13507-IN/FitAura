@@ -1,6 +1,35 @@
 import type { AIAnalysis, LookResult } from "@/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+const FALLBACK_API_BASE = "http://localhost:8080";
+
+function normalizeApiBaseUrl(rawValue?: string): string {
+  if (!rawValue || rawValue.trim().length === 0) {
+    return FALLBACK_API_BASE;
+  }
+
+  const firstValue = rawValue
+    .split(",")
+    .map((value) => value.trim())
+    .find((value) => value.length > 0);
+
+  if (!firstValue) {
+    return FALLBACK_API_BASE;
+  }
+
+  const fixedScheme = firstValue
+    .replace(/^http\/\//i, "http://")
+    .replace(/^https\/\//i, "https://")
+    .replace(/\/+$/, "");
+
+  try {
+    const validated = new URL(fixedScheme);
+    return validated.origin;
+  } catch {
+    return FALLBACK_API_BASE;
+  }
+}
+
+const API_BASE = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL);
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const data = await response.json();
