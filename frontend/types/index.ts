@@ -21,6 +21,31 @@ export interface LookResult {
   hairstyle: string;
   colorPalette: string[];
   confidenceTip: string;
+  analysis?: AIAnalysis;
+}
+
+export interface AnalyzerSignal {
+  status: string;
+  reason: string | null;
+}
+
+export interface AIAnalysis {
+  face: {
+    shape: string;
+    confidence: number;
+  } & AnalyzerSignal;
+  body: {
+    silhouette: string;
+    confidence: number;
+  } & AnalyzerSignal;
+  color: {
+    skinTone: string;
+    undertone: string;
+    palette: string[];
+    confidence: number;
+  } & AnalyzerSignal;
+  geminiSummary: string;
+  overallConfidence: number;
 }
 
 export interface StoredLookResult extends LookResult {

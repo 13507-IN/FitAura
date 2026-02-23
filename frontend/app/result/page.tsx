@@ -125,6 +125,26 @@ export default function ResultPage() {
           {result.confidenceTip}
         </div>
 
+        {result.analysis && (
+          <div className="result-item">
+            <strong>AI Image Analysis</strong>
+            <p className="hint">Face: {result.analysis.face.shape}</p>
+            <p className="hint">Body: {result.analysis.body.silhouette}</p>
+            <p className="hint">
+              Skin Tone: {result.analysis.color.skinTone} | Undertone: {result.analysis.color.undertone}
+            </p>
+            <p className="hint">Overall Confidence: {Math.round(result.analysis.overallConfidence * 100)}%</p>
+            <p className="hint">
+              Detector Status: face={result.analysis.face.status}, body={result.analysis.body.status},
+              color={result.analysis.color.status}
+            </p>
+            {result.analysis.face.reason && <p className="hint">Face Fallback Reason: {result.analysis.face.reason}</p>}
+            {result.analysis.body.reason && <p className="hint">Body Fallback Reason: {result.analysis.body.reason}</p>}
+            {result.analysis.color.reason && <p className="hint">Color Fallback Reason: {result.analysis.color.reason}</p>}
+            <p className="hint">Gemini: {result.analysis.geminiSummary}</p>
+          </div>
+        )}
+
         {error && <p className="error">{error}</p>}
 
         <div className="actions">

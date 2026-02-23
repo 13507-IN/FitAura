@@ -85,12 +85,22 @@ npm run dev
 
 5. Open `http://localhost:3000`.
 
+## Deployment Env Mapping
+
+- Render (backend):
+  - `FRONTEND_ORIGIN=https://your-frontend.vercel.app`
+  - `GEMINI_API_KEY=<your-key>`
+  - `GEMINI_MODEL=gemini-2.5-flash`
+- Vercel (frontend):
+  - `NEXT_PUBLIC_API_BASE_URL=https://your-backend.onrender.com`
+
 ## API Endpoints
 
 - `POST /api/analyze` (multipart/form-data)
   - `image`: file
   - `occasion`: `College | Interview | Date | Party | Wedding | Casual Hangout | Travel`
   - `styleVibe`: optional `Minimal | Streetwear | Classy | Ethnic | Sporty`
+  - Response includes `data` (look suggestion) and `analysis` (face/body/color/Gemini outputs + confidence + detector status)
 - `POST /api/regenerate` (application/json)
   - `occasion`
   - `styleVibe`

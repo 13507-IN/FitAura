@@ -13,6 +13,33 @@ function validateStyle(styleVibe) {
   return STYLE_OPTIONS.includes(styleVibe);
 }
 
+function toAnalysisResponse(analysis) {
+  return {
+    face: {
+      shape: analysis.faceData.shape,
+      confidence: analysis.faceData.faceConfidence,
+      status: analysis.detectorMeta?.face?.status ?? "ok",
+      reason: analysis.detectorMeta?.face?.reason ?? null
+    },
+    body: {
+      silhouette: analysis.bodyData.silhouette,
+      confidence: analysis.bodyData.bodyConfidence,
+      status: analysis.detectorMeta?.body?.status ?? "ok",
+      reason: analysis.detectorMeta?.body?.reason ?? null
+    },
+    color: {
+      skinTone: analysis.colorData.skinTone,
+      undertone: analysis.colorData.undertone,
+      palette: analysis.colorData.palette,
+      confidence: analysis.colorData.colorConfidence,
+      status: analysis.detectorMeta?.color?.status ?? "ok",
+      reason: analysis.detectorMeta?.color?.reason ?? null
+    },
+    geminiSummary: analysis.geminiSummary,
+    overallConfidence: analysis.confidenceScore
+  };
+}
+
 export async function analyzeLookController(req, res, next) {
   try {
     const image = req.file;
@@ -51,7 +78,8 @@ export async function analyzeLookController(req, res, next) {
 
     return res.json({
       success: true,
-      data: suggestions
+      data: suggestions,
+      analysis: toAnalysisResponse(analysis)
     });
   } catch (error) {
     return next(error);
@@ -84,10 +112,16 @@ export async function regenerateLookController(req, res, next) {
         undertone: "neutral",
         palette: Array.isArray(basePalette) && basePalette.length > 0
           ? basePalette
-          : ["#DDD3C1", "#B48A64", "#4A3E3B", "#1F2430"]
+          : ["#DDD3C1", "#B48A64", "#4A3E3B", "#1F2430"],
+        colorConfidence: 0.69
       },
       geminiSummary: "Regenerated from prior style context.",
-      confidenceScore: 0.72
+      confidenceScore: 0.72,
+      detectorMeta: {
+        face: { status: "regenerated", reason: null },
+        body: { status: "regenerated", reason: null },
+        color: { status: "regenerated", reason: null }
+      }
     };
 
     const suggestions = buildLookRecommendations({
@@ -99,7 +133,8 @@ export async function regenerateLookController(req, res, next) {
 
     return res.json({
       success: true,
-      data: suggestions
+      data: suggestions,
+      analysis: toAnalysisResponse(analysisFallback)
     });
   } catch (error) {
     return next(error);

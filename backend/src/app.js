@@ -5,10 +5,14 @@ import analyzeRoutes from "./routes/analyzeRoutes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 const app = express();
+const allowedOrigins = (process.env.FRONTEND_ORIGIN ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN?.split(",") ?? "*"
+    origin: allowedOrigins.length > 0 ? allowedOrigins : "*"
   })
 );
 

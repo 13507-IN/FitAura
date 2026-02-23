@@ -1,4 +1,4 @@
-import type { LookResult } from "@/types";
+import type { AIAnalysis, LookResult } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
@@ -19,8 +19,11 @@ export async function analyzeLook(formData: FormData): Promise<LookResult> {
     body: formData
   });
 
-  const data = await parseResponse<{ success: boolean; data: LookResult }>(response);
-  return data.data;
+  const data = await parseResponse<{ success: boolean; data: LookResult; analysis?: AIAnalysis }>(response);
+  return {
+    ...data.data,
+    analysis: data.analysis
+  };
 }
 
 export async function regenerateLook(payload: {
@@ -36,6 +39,9 @@ export async function regenerateLook(payload: {
     body: JSON.stringify(payload)
   });
 
-  const data = await parseResponse<{ success: boolean; data: LookResult }>(response);
-  return data.data;
+  const data = await parseResponse<{ success: boolean; data: LookResult; analysis?: AIAnalysis }>(response);
+  return {
+    ...data.data,
+    analysis: data.analysis
+  };
 }
