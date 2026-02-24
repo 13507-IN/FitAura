@@ -53,6 +53,8 @@ export async function analyzeImage(imageBuffer, mimeType) {
   const colorData = colorResult.status === "fulfilled" ? colorResult.value : COLOR_FALLBACK;
   const demographicData =
     demographicResult.status === "fulfilled" ? demographicResult.value : DEMOGRAPHIC_FALLBACK;
+  const demographicWasFallback =
+    demographicData.gender === "unknown" && demographicData.age === null;
 
   const geminiSummary = await describeOutfitContext({
     imageBuffer,
@@ -89,9 +91,14 @@ export async function analyzeImage(imageBuffer, mimeType) {
         reason: colorResult.status === "rejected" ? toErrorMessage(colorResult.reason) : null
       },
       demographic: {
-        status: demographicResult.status === "fulfilled" ? "ok" : "fallback",
+        status:
+          demographicResult.status === "fulfilled" && !demographicWasFallback ? "ok" : "fallback",
         reason:
-          demographicResult.status === "rejected" ? toErrorMessage(demographicResult.reason) : null
+          demographicResult.status === "rejected"
+            ? toErrorMessage(demographicResult.reason)
+            : demographicWasFallback
+              ? "Low-confidence demographic estimate."
+              : null
       }
     }
   };

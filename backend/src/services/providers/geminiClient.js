@@ -70,6 +70,40 @@ const DEMOGRAPHIC_OUTPUT_SCHEMA = {
   required: ["gender", "age_estimate", "confidence"]
 };
 
+const DEMOGRAPHIC_GENDER_ONLY_SYSTEM_PROMPT = `
+You are FitAura's demographic-estimation assistant for styling personalization.
+Estimate only likely visible gender presentation for the primary person in the image.
+
+Guardrails:
+- Never infer race, ethnicity, religion, nationality, disability, health, or sexual orientation.
+- Allowed labels: "male", "female", "androgynous", or "unknown".
+- If uncertain, set gender to "unknown".
+- Keep confidence between 0 and 1.
+
+Output format:
+Return strict JSON with this schema:
+{
+  "gender": string,
+  "confidence": number
+}
+`.trim();
+
+const DEMOGRAPHIC_GENDER_ONLY_OUTPUT_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    gender: { type: "STRING" },
+    confidence: { type: "NUMBER" }
+  },
+  required: ["gender", "confidence"]
+};
+
+const GEMINI_SAFETY_SETTINGS = [
+  { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+  { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+];
+
 function sanitizeText(raw) {
   if (typeof raw !== "string") {
     return "";
@@ -198,7 +232,7 @@ function normalizeGender(rawGender) {
     return "male";
   }
 
-  if (/\bandrog/i.test(cleaned)) {
+  if (/\bandrog/i.test(cleaned) || /\bnon[-\s]?binary\b|\bunisex\b|\bgender[-\s]?neutral\b/.test(cleaned)) {
     return "androgynous";
   }
 
@@ -225,10 +259,68 @@ function normalizeConfidence(rawConfidence) {
   return Number(clamp(numeric, 0, 1).toFixed(2));
 }
 
+function pickFirstField(source, keys) {
+  if (!source || typeof source !== "object") {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) {
+      return source[key];
+    }
+  }
+
+  return undefined;
+}
+
+function parseLooseDemographicText(raw) {
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return null;
+  }
+
+  const genderMatch = raw.match(
+    /\b(male|female|man|woman|masculine|feminine|androgynous|non-binary|nonbinary|unisex|unknown)\b/i
+  );
+  const ageMatch = raw.match(/\b(?:age|aged|around|approx(?:imately)?)\s*[:\-]?\s*(\d{2})\b/i);
+  const confidenceMatch = raw.match(/\b(?:confidence|score)\s*[:\-]?\s*(0(?:\.\d+)?|1(?:\.0+)?)\b/i);
+
+  if (!genderMatch && !ageMatch && !confidenceMatch) {
+    return null;
+  }
+
+  return {
+    gender: genderMatch?.[1],
+    age_estimate: ageMatch ? Number(ageMatch[1]) : null,
+    confidence: confidenceMatch ? Number(confidenceMatch[1]) : undefined
+  };
+}
+
 function deriveDemographicData(parsedResponse) {
-  const gender = normalizeGender(parsedResponse?.gender);
-  const age = normalizeAge(parsedResponse?.age_estimate);
-  const demographicConfidence = normalizeConfidence(parsedResponse?.confidence);
+  const genderRaw = pickFirstField(parsedResponse, [
+    "gender",
+    "gender_presentation",
+    "likely_gender",
+    "predicted_gender",
+    "sex",
+    "presentation"
+  ]);
+  const ageRaw = pickFirstField(parsedResponse, [
+    "age_estimate",
+    "age",
+    "estimated_age",
+    "approx_age",
+    "ageEstimate"
+  ]);
+  const confidenceRaw = pickFirstField(parsedResponse, [
+    "confidence",
+    "score",
+    "probability",
+    "gender_confidence"
+  ]);
+
+  const gender = normalizeGender(genderRaw);
+  const age = normalizeAge(ageRaw);
+  const demographicConfidence = normalizeConfidence(confidenceRaw);
 
   if (gender === "unknown" && age === null) {
     return DEFAULT_DEMOGRAPHIC_DATA;
@@ -239,6 +331,88 @@ function deriveDemographicData(parsedResponse) {
     age,
     demographicConfidence
   };
+}
+
+function isDemographicResolved(demographicData) {
+  return demographicData.gender !== "unknown" || demographicData.age !== null;
+}
+
+function buildModelCandidates(primaryModel, fallbackModel) {
+  return [...new Set([primaryModel, fallbackModel].filter((model) => typeof model === "string" && model.length > 0))];
+}
+
+async function requestDemographicCandidate({
+  apiKey,
+  model,
+  optimizedImage,
+  normalizedMimeType,
+  timeoutMs,
+  genderOnly
+}) {
+  const { controller, clear } = createTimeoutController(timeoutMs);
+
+  try {
+    const response = await fetch(`${GEMINI_URL}/${model}:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: genderOnly ? DEMOGRAPHIC_GENDER_ONLY_SYSTEM_PROMPT : DEMOGRAPHIC_SYSTEM_PROMPT }]
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: genderOnly
+                  ? "Estimate likely visible gender presentation for styling context."
+                  : "Estimate likely visible gender presentation and approximate age for styling context."
+              },
+              {
+                inlineData: {
+                  mimeType: normalizedMimeType,
+                  data: optimizedImage.toString("base64")
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          topP: 0.8,
+          topK: 24,
+          maxOutputTokens: genderOnly ? 50 : 80,
+          responseMimeType: "application/json",
+          responseSchema: genderOnly ? DEMOGRAPHIC_GENDER_ONLY_OUTPUT_SCHEMA : DEMOGRAPHIC_OUTPUT_SCHEMA
+        },
+        safetySettings: GEMINI_SAFETY_SETTINGS
+      })
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (data?.promptFeedback?.blockReason) {
+      return null;
+    }
+
+    const rawText = extractCandidateText(data);
+    const parsed = parseJsonFromText(rawText) ?? parseLooseDemographicText(rawText);
+    if (!parsed) {
+      return null;
+    }
+
+    return deriveDemographicData(parsed);
+  } catch {
+    return null;
+  } finally {
+    clear();
+  }
 }
 
 export async function describeOutfitContext({ imageBuffer, mimeType, faceData, bodyData, colorData }) {
@@ -289,12 +463,7 @@ export async function describeOutfitContext({ imageBuffer, mimeType, faceData, b
           responseMimeType: "application/json",
           responseSchema: OUTPUT_SCHEMA
         },
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
-        ]
+        safetySettings: GEMINI_SAFETY_SETTINGS
       })
     });
 
@@ -323,7 +492,8 @@ export async function describeOutfitContext({ imageBuffer, mimeType, faceData, b
 
 export async function estimateDemographics({ imageBuffer, mimeType }) {
   const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  const primaryModel = process.env.GEMINI_DEMOGRAPHIC_MODEL || "gemini-2.5-pro";
+  const fallbackModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
   if (!apiKey) {
     return DEFAULT_DEMOGRAPHIC_DATA;
@@ -332,71 +502,34 @@ export async function estimateDemographics({ imageBuffer, mimeType }) {
   const optimizedImage = await preprocessForGemini(imageBuffer, 1200);
   const normalizedMimeType = normalizeMimeType(mimeType);
   const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS || 10000);
-  const { controller, clear } = createTimeoutController(timeoutMs);
 
-  try {
-    const response = await fetch(`${GEMINI_URL}/${model}:generateContent?key=${apiKey}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: DEMOGRAPHIC_SYSTEM_PROMPT }]
-        },
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: "Estimate likely visible gender presentation and approximate age for styling context."
-              },
-              {
-                inlineData: {
-                  mimeType: normalizedMimeType,
-                  data: optimizedImage.toString("base64")
-                }
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          topP: 0.8,
-          topK: 24,
-          maxOutputTokens: 80,
-          responseMimeType: "application/json",
-          responseSchema: DEMOGRAPHIC_OUTPUT_SCHEMA
-        },
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
-        ]
-      })
+  for (const model of buildModelCandidates(primaryModel, fallbackModel)) {
+    const fullDemographic = await requestDemographicCandidate({
+      apiKey,
+      model,
+      optimizedImage,
+      normalizedMimeType,
+      timeoutMs,
+      genderOnly: false
     });
 
-    if (!response.ok) {
-      return DEFAULT_DEMOGRAPHIC_DATA;
+    if (fullDemographic && isDemographicResolved(fullDemographic)) {
+      return fullDemographic;
     }
 
-    const data = await response.json();
-    if (data?.promptFeedback?.blockReason) {
-      return DEFAULT_DEMOGRAPHIC_DATA;
-    }
+    const genderOnlyDemographic = await requestDemographicCandidate({
+      apiKey,
+      model,
+      optimizedImage,
+      normalizedMimeType,
+      timeoutMs,
+      genderOnly: true
+    });
 
-    const rawText = extractCandidateText(data);
-    const parsed = parseJsonFromText(rawText);
-    if (!parsed) {
-      return DEFAULT_DEMOGRAPHIC_DATA;
+    if (genderOnlyDemographic && genderOnlyDemographic.gender !== "unknown") {
+      return genderOnlyDemographic;
     }
-
-    return deriveDemographicData(parsed);
-  } catch {
-    return DEFAULT_DEMOGRAPHIC_DATA;
-  } finally {
-    clear();
   }
+
+  return DEFAULT_DEMOGRAPHIC_DATA;
 }
