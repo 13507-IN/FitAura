@@ -1,19 +1,57 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import gsap from "gsap";
+import { Brain, Camera, RefreshCcw, Sparkles } from "lucide-react";
+import { BackgroundBeams } from "@/components/aceternity/background-beams";
+import { Spotlight } from "@/components/aceternity/spotlight";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ImageMosaic } from "@/components/visual/image-mosaic";
+import { SectionReveal } from "@/components/visual/section-reveal";
 import { regenerateLook } from "@/lib/api";
 import { loadLookResult, saveLookResult } from "@/lib/storage";
 import type { StoredLookResult } from "@/types";
 
-export default function ResultPage() {
+export default function ResultPage(): JSX.Element {
   const [result, setResult] = useState<StoredLookResult | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState("");
+  const headlineRef = useRef<HTMLHeadingElement | null>(null);
+  const paletteRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setResult(loadLookResult());
   }, []);
+
+  useEffect(() => {
+    if (!result) {
+      return;
+    }
+
+    const context = gsap.context(() => {
+      if (headlineRef.current) {
+        gsap.fromTo(
+          headlineRef.current,
+          { y: 20, opacity: 0, filter: "blur(6px)" },
+          { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.8, ease: "power2.out" }
+        );
+      }
+
+      if (paletteRef.current) {
+        gsap.fromTo(
+          paletteRef.current.children,
+          { y: 12, opacity: 0 },
+          { y: 0, opacity: 1, stagger: 0.06, duration: 0.5, ease: "power2.out", delay: 0.12 }
+        );
+      }
+    });
+
+    return () => context.revert();
+  }, [result]);
 
   const handleRegenerate = async () => {
     if (!result) {
@@ -48,123 +86,178 @@ export default function ResultPage() {
     }
   };
 
+  const outfitItems = useMemo(
+    () =>
+      result
+        ? [
+            { label: "Top wear", value: result.topWear },
+            { label: "Bottom wear", value: result.bottomWear },
+            { label: "Footwear", value: result.footwear },
+            { label: "Accessories", value: result.accessories },
+            { label: "Hairstyle", value: result.hairstyle }
+          ]
+        : [],
+    [result]
+  );
+
   if (!result) {
     return (
-      <main className="page">
-        <section className="card">
-          <h1>No style result yet</h1>
-          <p className="subtitle">Upload an image first to generate personalized recommendations.</p>
-          <Link href="/upload" className="button primary">
-            Go To Upload
-          </Link>
+      <main className="site-page">
+        <section className="empty-shell">
+          <Badge variant="secondary">No Result Found</Badge>
+          <h1>Generate a look first to unlock your style report.</h1>
+          <p>Upload a photo and FitAura will produce a complete outfit recommendation in one click.</p>
+          <Button asChild size="lg">
+            <Link href="/upload">Go To Upload</Link>
+          </Button>
         </section>
       </main>
     );
   }
 
   return (
-    <main className="page grid">
-      <section className="hero">
-        <p className="subtitle">
-          Occasion: {result.occasion} | Vibe: {result.styleVibe}
-        </p>
-        <h1>Your FitAura Look</h1>
-        <p>Here is the best style combo for your photo, event, and selected aesthetic.</p>
+    <main className="site-page">
+      <section className="hero-shell hero-shell--result">
+        <Spotlight className="spotlight--left" fill="30, 64, 175" />
+        <Spotlight className="spotlight--right" fill="21, 128, 61" delay={0.2} />
+        <BackgroundBeams />
+
+        <div className="hero-copy">
+          <Badge>Styled Result</Badge>
+          <h1 ref={headlineRef}>
+            Your {result.occasion} look with a {result.styleVibe} vibe is ready.
+          </h1>
+          <p>
+            Review the generated outfit stack, color direction, and confidence tip. Regenerate anytime for a fresh
+            variation while keeping your selected context.
+          </p>
+        </div>
+
+        <div className="hero-media">
+          <ImageMosaic bucket="result-hero" count={6} labelPrefix="Result" />
+        </div>
       </section>
 
-      <section className="result-top">
-        <article className="card">
-          {result.previewUrl ? (
-            <img className="preview" src={result.previewUrl} alt="Uploaded portrait preview" />
-          ) : (
-            <p className="subtitle">Image preview unavailable.</p>
-          )}
-        </article>
+      <section className="result-layout">
+        <SectionReveal className="result-main">
+          <Card>
+            <CardHeader>
+              <CardTitle>Uploaded Preview</CardTitle>
+              <CardDescription>Source image used for this generated recommendation.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {result.previewUrl ? (
+                <img className="result-preview" src={result.previewUrl} alt="Uploaded portrait preview" />
+              ) : (
+                <p className="muted-line">Image preview unavailable.</p>
+              )}
+            </CardContent>
+          </Card>
 
-        <article className="card">
-          <ul className="result-list">
-            <li className="result-item">
-              <strong>Top Wear</strong>
-              {result.topWear}
-            </li>
-            <li className="result-item">
-              <strong>Bottom Wear</strong>
-              {result.bottomWear}
-            </li>
-            <li className="result-item">
-              <strong>Footwear</strong>
-              {result.footwear}
-            </li>
-            <li className="result-item">
-              <strong>Accessories</strong>
-              {result.accessories}
-            </li>
-            <li className="result-item">
-              <strong>Hairstyle</strong>
-              {result.hairstyle}
-            </li>
-          </ul>
-        </article>
-      </section>
+          <div className="below-card-actions">
+            <Button type="button" size="lg" onClick={handleRegenerate} disabled={isRegenerating}>
+              {isRegenerating ? "Regenerating..." : "Regenerate Photo"}
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/upload">Alternate Photo</Link>
+            </Button>
+          </div>
 
-      <section className="card grid">
-        <div>
-          <h3>Recommended Color Palette</h3>
-          <div className="palette">
-            {result.colorPalette.map((color) => (
-              <div className="swatch" key={color}>
-                <div className="swatch-color" style={{ backgroundColor: color }} />
-                <div className="swatch-code">{color}</div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Outfit Breakdown</CardTitle>
+              <CardDescription>Core items selected by FitAura for this styling profile.</CardDescription>
+            </CardHeader>
+            <CardContent className="result-listing">
+              {outfitItems.map((item) => (
+                <div className="result-line" key={item.label}>
+                  <span>{item.label}</span>
+                  <p>{item.value}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recommended Palette</CardTitle>
+              <CardDescription>Use these colors as your matching foundation.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="palette-grid" ref={paletteRef}>
+                {result.colorPalette.map((color) => (
+                  <motion.div key={color} className="palette-chip" whileHover={{ y: -5 }}>
+                    <div className="palette-swatch" style={{ backgroundColor: color }} />
+                    <span>{color}</span>
+                  </motion.div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </CardContent>
+          </Card>
 
-        <div className="result-item">
-          <strong>Confidence Tip</strong>
-          {result.confidenceTip}
-        </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Confidence Tip</CardTitle>
+              <CardDescription>Simple action to elevate your final appearance.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="tip-note tip-note--flat">
+                <Sparkles size={16} />
+                {result.confidenceTip}
+              </p>
+            </CardContent>
+          </Card>
+        </SectionReveal>
 
-        {result.analysis && (
-          <div className="result-item">
-            <strong>AI Image Analysis</strong>
-            <p className="hint">Face: {result.analysis.face.shape}</p>
-            <p className="hint">Body: {result.analysis.body.silhouette}</p>
-            <p className="hint">
-              Skin Tone: {result.analysis.color.skinTone} | Undertone: {result.analysis.color.undertone}
-            </p>
-            <p className="hint">
-              Gender (estimated): {result.analysis.demographic?.gender ?? "unknown"} | Age (estimated):{" "}
-              {typeof result.analysis.demographic?.age === "number"
-                ? result.analysis.demographic.age
-                : "unknown"}
-            </p>
-            <p className="hint">Overall Confidence: {Math.round(result.analysis.overallConfidence * 100)}%</p>
-            <p className="hint">
-              Detector Status: face={result.analysis.face.status}, body={result.analysis.body.status},
-              color={result.analysis.color.status}, demographic=
-              {result.analysis.demographic?.status ?? "unknown"}
-            </p>
-            {result.analysis.face.reason && <p className="hint">Face Fallback Reason: {result.analysis.face.reason}</p>}
-            {result.analysis.body.reason && <p className="hint">Body Fallback Reason: {result.analysis.body.reason}</p>}
-            {result.analysis.color.reason && <p className="hint">Color Fallback Reason: {result.analysis.color.reason}</p>}
-            {result.analysis.demographic?.reason && (
-              <p className="hint">Demographic Fallback Reason: {result.analysis.demographic.reason}</p>
-            )}
-            <p className="hint">Gemini: {result.analysis.geminiSummary}</p>
-          </div>
-        )}
+        <SectionReveal className="result-aside" delay={0.06}>
+          {result.analysis && (
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Analysis Snapshot</CardTitle>
+                <CardDescription>Signals extracted from image analysis engines.</CardDescription>
+              </CardHeader>
+              <CardContent className="analysis-grid">
+                <p>
+                  <Brain size={16} />
+                  Face shape: {result.analysis.face.shape}
+                </p>
+                <p>
+                  <Camera size={16} />
+                  Body silhouette: {result.analysis.body.silhouette}
+                </p>
+                <p>
+                  <Sparkles size={16} />
+                  Tone: {result.analysis.color.skinTone} ({result.analysis.color.undertone})
+                </p>
+                <p>
+                  <RefreshCcw size={16} />
+                  Overall confidence: {Math.round(result.analysis.overallConfidence * 100)}%
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
-        {error && <p className="error">{error}</p>}
+          <Card>
+            <CardHeader>
+              <CardTitle>Inspiration Board</CardTitle>
+              <CardDescription>Random references to compare against your generated look.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ImageMosaic bucket="result-board" count={12} labelPrefix="Reference" />
+            </CardContent>
+          </Card>
 
-        <div className="actions">
-          <button className="button primary" type="button" onClick={handleRegenerate} disabled={isRegenerating}>
-            {isRegenerating ? "Regenerating..." : "Regenerate"}
-          </button>
-          <Link href="/upload" className="button secondary">
-            Try Another Photo
-          </Link>
-        </div>
+          {error && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Regeneration Error</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="error-line">{error}</p>
+              </CardContent>
+            </Card>
+          )}
+        </SectionReveal>
       </section>
     </main>
   );
