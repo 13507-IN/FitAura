@@ -1,7 +1,7 @@
 import { detectBody } from "./detectors/bodyDetector.js";
 import { detectFace } from "./detectors/faceDetector.js";
 import { detectSkinTonePalette } from "./detectors/colorDetector.js";
-import { describeOutfitContext } from "./providers/geminiClient.js";
+import { describeOutfitContext, estimateDemographics } from "./providers/geminiClient.js";
 
 const FACE_FALLBACK = { shape: "oval", faceConfidence: 0.5 };
 const BODY_FALLBACK = { silhouette: "balanced", bodyConfidence: 0.5 };
@@ -10,6 +10,11 @@ const COLOR_FALLBACK = {
   undertone: "neutral",
   palette: ["#D6A67A", "#AA6A47", "#6D422C", "#1F2A33"],
   colorConfidence: 0.54
+};
+const DEMOGRAPHIC_FALLBACK = {
+  gender: "unknown",
+  age: null,
+  demographicConfidence: 0.4
 };
 
 function toErrorMessage(reason) {
@@ -23,10 +28,11 @@ function toErrorMessage(reason) {
 }
 
 export async function analyzeImage(imageBuffer, mimeType) {
-  const [faceResult, bodyResult, colorResult] = await Promise.allSettled([
+  const [faceResult, bodyResult, colorResult, demographicResult] = await Promise.allSettled([
     detectFace(imageBuffer),
     detectBody(imageBuffer),
-    detectSkinTonePalette(imageBuffer)
+    detectSkinTonePalette(imageBuffer),
+    estimateDemographics({ imageBuffer, mimeType })
   ]);
 
   if (faceResult.status === "rejected") {
@@ -38,10 +44,15 @@ export async function analyzeImage(imageBuffer, mimeType) {
   if (colorResult.status === "rejected") {
     console.warn("Color detector fallback:", colorResult.reason);
   }
+  if (demographicResult.status === "rejected") {
+    console.warn("Demographic detector fallback:", demographicResult.reason);
+  }
 
   const faceData = faceResult.status === "fulfilled" ? faceResult.value : FACE_FALLBACK;
   const bodyData = bodyResult.status === "fulfilled" ? bodyResult.value : BODY_FALLBACK;
   const colorData = colorResult.status === "fulfilled" ? colorResult.value : COLOR_FALLBACK;
+  const demographicData =
+    demographicResult.status === "fulfilled" ? demographicResult.value : DEMOGRAPHIC_FALLBACK;
 
   const geminiSummary = await describeOutfitContext({
     imageBuffer,
@@ -61,6 +72,7 @@ export async function analyzeImage(imageBuffer, mimeType) {
     faceData,
     bodyData,
     colorData,
+    demographicData,
     geminiSummary,
     confidenceScore,
     detectorMeta: {
@@ -75,6 +87,11 @@ export async function analyzeImage(imageBuffer, mimeType) {
       color: {
         status: colorResult.status === "fulfilled" ? "ok" : "fallback",
         reason: colorResult.status === "rejected" ? toErrorMessage(colorResult.reason) : null
+      },
+      demographic: {
+        status: demographicResult.status === "fulfilled" ? "ok" : "fallback",
+        reason:
+          demographicResult.status === "rejected" ? toErrorMessage(demographicResult.reason) : null
       }
     }
   };

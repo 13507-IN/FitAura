@@ -35,6 +35,13 @@ function toAnalysisResponse(analysis) {
       status: analysis.detectorMeta?.color?.status ?? "ok",
       reason: analysis.detectorMeta?.color?.reason ?? null
     },
+    demographic: {
+      gender: analysis.demographicData.gender,
+      age: analysis.demographicData.age,
+      confidence: analysis.demographicData.demographicConfidence,
+      status: analysis.detectorMeta?.demographic?.status ?? "ok",
+      reason: analysis.detectorMeta?.demographic?.reason ?? null
+    },
     geminiSummary: analysis.geminiSummary,
     overallConfidence: analysis.confidenceScore
   };
@@ -115,12 +122,18 @@ export async function regenerateLookController(req, res, next) {
           : ["#DDD3C1", "#B48A64", "#4A3E3B", "#1F2430"],
         colorConfidence: 0.69
       },
+      demographicData: {
+        gender: "unknown",
+        age: null,
+        demographicConfidence: 0.4
+      },
       geminiSummary: "Regenerated from prior style context.",
       confidenceScore: 0.72,
       detectorMeta: {
         face: { status: "regenerated", reason: null },
         body: { status: "regenerated", reason: null },
-        color: { status: "regenerated", reason: null }
+        color: { status: "regenerated", reason: null },
+        demographic: { status: "regenerated", reason: null }
       }
     };
 

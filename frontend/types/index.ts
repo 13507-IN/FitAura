@@ -44,6 +44,11 @@ export interface AIAnalysis {
     palette: string[];
     confidence: number;
   } & AnalyzerSignal;
+  demographic: {
+    gender: string;
+    age: number | null;
+    confidence: number;
+  } & AnalyzerSignal;
   geminiSummary: string;
   overallConfidence: number;
 }

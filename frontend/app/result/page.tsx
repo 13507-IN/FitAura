@@ -133,14 +133,24 @@ export default function ResultPage() {
             <p className="hint">
               Skin Tone: {result.analysis.color.skinTone} | Undertone: {result.analysis.color.undertone}
             </p>
+            <p className="hint">
+              Gender (estimated): {result.analysis.demographic?.gender ?? "unknown"} | Age (estimated):{" "}
+              {typeof result.analysis.demographic?.age === "number"
+                ? result.analysis.demographic.age
+                : "unknown"}
+            </p>
             <p className="hint">Overall Confidence: {Math.round(result.analysis.overallConfidence * 100)}%</p>
             <p className="hint">
               Detector Status: face={result.analysis.face.status}, body={result.analysis.body.status},
-              color={result.analysis.color.status}
+              color={result.analysis.color.status}, demographic=
+              {result.analysis.demographic?.status ?? "unknown"}
             </p>
             {result.analysis.face.reason && <p className="hint">Face Fallback Reason: {result.analysis.face.reason}</p>}
             {result.analysis.body.reason && <p className="hint">Body Fallback Reason: {result.analysis.body.reason}</p>}
             {result.analysis.color.reason && <p className="hint">Color Fallback Reason: {result.analysis.color.reason}</p>}
+            {result.analysis.demographic?.reason && (
+              <p className="hint">Demographic Fallback Reason: {result.analysis.demographic.reason}</p>
+            )}
             <p className="hint">Gemini: {result.analysis.geminiSummary}</p>
           </div>
         )}

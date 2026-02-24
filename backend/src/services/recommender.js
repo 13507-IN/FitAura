@@ -84,12 +84,63 @@ function pick(items, seed) {
   return items[index];
 }
 
+function toAgeBucket(age) {
+  if (typeof age !== "number") {
+    return "unknown";
+  }
+  if (age < 20) {
+    return "teen";
+  }
+  if (age < 30) {
+    return "20s";
+  }
+  if (age < 40) {
+    return "30s";
+  }
+  if (age < 50) {
+    return "40s";
+  }
+  return "50plus";
+}
+
+function buildDemographicStylingCue(demographicData) {
+  const gender = demographicData?.gender ?? "unknown";
+  const age = demographicData?.age ?? null;
+  const ageBucket = toAgeBucket(age);
+
+  const ageCue =
+    ageBucket === "teen"
+      ? "Keep fits flexible and youthful with simple layers."
+      : ageBucket === "20s"
+        ? "Lean into sharp modern basics and clean proportions."
+        : ageBucket === "30s"
+          ? "Prioritize refined staples with stronger fabric quality."
+          : ageBucket === "40s"
+            ? "Use structured tailoring with timeless color pairings."
+            : ageBucket === "50plus"
+              ? "Focus on elegant cuts, comfort, and premium textures."
+              : "";
+
+  const genderCue =
+    gender === "male"
+      ? "Favor masculine silhouette balance through shoulder and waist structure."
+      : gender === "female"
+        ? "Favor feminine silhouette balance with waist definition and soft layering."
+        : gender === "androgynous"
+          ? "Blend masculine and feminine pieces for a balanced androgynous look."
+          : "";
+
+  return [ageCue, genderCue].filter((text) => text.length > 0).join(" ");
+}
+
 export function buildLookRecommendations({ occasion, styleVibe, analysis, variantToken }) {
   const vibe = styleVibe && styleVibe !== "" ? styleVibe : "Auto";
   const rules = OCCASION_RULES[occasion];
   const accents = STYLE_ACCENT[vibe] ?? STYLE_ACCENT.Auto;
 
-  const baseKey = `${occasion}:${vibe}:${analysis.colorData.skinTone}:${analysis.faceData.shape}:${variantToken}`;
+  const ageBucket = toAgeBucket(analysis.demographicData?.age ?? null);
+  const genderSeed = analysis.demographicData?.gender ?? "unknown";
+  const baseKey = `${occasion}:${vibe}:${analysis.colorData.skinTone}:${analysis.faceData.shape}:${genderSeed}:${ageBucket}:${variantToken}`;
 
   const topWear = pick(rules.top, `${baseKey}:top`);
   const bottomWear = pick(rules.bottom, `${baseKey}:bottom`);
@@ -97,7 +148,10 @@ export function buildLookRecommendations({ occasion, styleVibe, analysis, varian
   const hairstyle = pick(rules.hairstyle, `${baseKey}:hair`);
 
   const accessories = `${pick(rules.accessories, `${baseKey}:acc`)}. ${accents.accessories}`;
-  const confidenceTip = `${accents.confidence} ${analysis.geminiSummary}`;
+  const demographicCue = buildDemographicStylingCue(analysis.demographicData);
+  const confidenceTip = [accents.confidence, demographicCue, analysis.geminiSummary]
+    .filter((text) => typeof text === "string" && text.trim().length > 0)
+    .join(" ");
 
   return {
     topWear,

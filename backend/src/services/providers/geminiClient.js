@@ -3,6 +3,11 @@ import { normalizeMimeType, preprocessForGemini } from "../ml/imagePreprocess.js
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_SAFE_TIP =
   "Keep your outfit balanced with one focal piece and maintain clean, intentional grooming.";
+const DEFAULT_DEMOGRAPHIC_DATA = {
+  gender: "unknown",
+  age: null,
+  demographicConfidence: 0.4
+};
 const MAX_TEXT_LENGTH = 220;
 const BLOCKED_FINISH_REASONS = new Set(["SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII"]);
 
@@ -34,6 +39,35 @@ const OUTPUT_SCHEMA = {
     style_note: { type: "STRING" }
   },
   required: ["confidence_tip", "grooming_tip", "style_note"]
+};
+
+const DEMOGRAPHIC_SYSTEM_PROMPT = `
+You are FitAura's demographic-estimation assistant for styling personalization.
+Estimate only likely visible gender presentation and approximate age.
+
+Guardrails:
+- Never infer race, ethnicity, religion, nationality, disability, health, or sexual orientation.
+- If uncertain, set gender to "unknown".
+- If uncertain about age, set age_estimate to 0.
+- Keep confidence between 0 and 1.
+
+Output format:
+Return strict JSON with this schema:
+{
+  "gender": string,
+  "age_estimate": number,
+  "confidence": number
+}
+`.trim();
+
+const DEMOGRAPHIC_OUTPUT_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    gender: { type: "STRING" },
+    age_estimate: { type: "NUMBER" },
+    confidence: { type: "NUMBER" }
+  },
+  required: ["gender", "age_estimate", "confidence"]
 };
 
 function sanitizeText(raw) {
@@ -145,6 +179,68 @@ function createTimeoutController(timeoutMs) {
   };
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function normalizeGender(rawGender) {
+  if (typeof rawGender !== "string") {
+    return "unknown";
+  }
+
+  const cleaned = rawGender.trim().toLowerCase();
+
+  if (/(^|\W)female($|\W)|\bwoman\b|\bfeminine\b/.test(cleaned)) {
+    return "female";
+  }
+
+  if (/(^|\W)male($|\W)|\bman\b|\bmasculine\b/.test(cleaned)) {
+    return "male";
+  }
+
+  if (/\bandrog/i.test(cleaned)) {
+    return "androgynous";
+  }
+
+  return "unknown";
+}
+
+function normalizeAge(rawAge) {
+  const numericAge =
+    typeof rawAge === "number" ? rawAge : typeof rawAge === "string" ? Number.parseFloat(rawAge) : NaN;
+
+  if (!Number.isFinite(numericAge) || numericAge <= 0) {
+    return null;
+  }
+
+  return Math.round(clamp(numericAge, 12, 80));
+}
+
+function normalizeConfidence(rawConfidence) {
+  const numeric = typeof rawConfidence === "number" ? rawConfidence : Number.parseFloat(rawConfidence);
+  if (!Number.isFinite(numeric)) {
+    return DEFAULT_DEMOGRAPHIC_DATA.demographicConfidence;
+  }
+
+  return Number(clamp(numeric, 0, 1).toFixed(2));
+}
+
+function deriveDemographicData(parsedResponse) {
+  const gender = normalizeGender(parsedResponse?.gender);
+  const age = normalizeAge(parsedResponse?.age_estimate);
+  const demographicConfidence = normalizeConfidence(parsedResponse?.confidence);
+
+  if (gender === "unknown" && age === null) {
+    return DEFAULT_DEMOGRAPHIC_DATA;
+  }
+
+  return {
+    gender,
+    age,
+    demographicConfidence
+  };
+}
+
 export async function describeOutfitContext({ imageBuffer, mimeType, faceData, bodyData, colorData }) {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
@@ -220,6 +316,86 @@ export async function describeOutfitContext({ imageBuffer, mimeType, faceData, b
     return deriveSafeTip(parsed);
   } catch {
     return DEFAULT_SAFE_TIP;
+  } finally {
+    clear();
+  }
+}
+
+export async function estimateDemographics({ imageBuffer, mimeType }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+
+  if (!apiKey) {
+    return DEFAULT_DEMOGRAPHIC_DATA;
+  }
+
+  const optimizedImage = await preprocessForGemini(imageBuffer, 1200);
+  const normalizedMimeType = normalizeMimeType(mimeType);
+  const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS || 10000);
+  const { controller, clear } = createTimeoutController(timeoutMs);
+
+  try {
+    const response = await fetch(`${GEMINI_URL}/${model}:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: DEMOGRAPHIC_SYSTEM_PROMPT }]
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: "Estimate likely visible gender presentation and approximate age for styling context."
+              },
+              {
+                inlineData: {
+                  mimeType: normalizedMimeType,
+                  data: optimizedImage.toString("base64")
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          topP: 0.8,
+          topK: 24,
+          maxOutputTokens: 80,
+          responseMimeType: "application/json",
+          responseSchema: DEMOGRAPHIC_OUTPUT_SCHEMA
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      return DEFAULT_DEMOGRAPHIC_DATA;
+    }
+
+    const data = await response.json();
+    if (data?.promptFeedback?.blockReason) {
+      return DEFAULT_DEMOGRAPHIC_DATA;
+    }
+
+    const rawText = extractCandidateText(data);
+    const parsed = parseJsonFromText(rawText);
+    if (!parsed) {
+      return DEFAULT_DEMOGRAPHIC_DATA;
+    }
+
+    return deriveDemographicData(parsed);
+  } catch {
+    return DEFAULT_DEMOGRAPHIC_DATA;
   } finally {
     clear();
   }
