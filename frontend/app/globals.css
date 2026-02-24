@@ -531,12 +531,23 @@ a {
   height: 44px;
 }
 
-.palette-chip span {
-  display: block;
+.palette-meta {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.4rem 0.36rem 0.46rem;
   text-align: center;
-  padding: 0.36rem 0.3rem;
+}
+
+.palette-meta strong {
   font-size: 0.72rem;
+  line-height: 1.15;
+}
+
+.palette-meta span {
+  font-size: 0.67rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #55627f;
 }
 
 .analysis-grid {

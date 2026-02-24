@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ImageMosaic } from "@/components/visual/image-mosaic";
 import { SectionReveal } from "@/components/visual/section-reveal";
 import { regenerateLook } from "@/lib/api";
+import { getColorNameFromHex } from "@/lib/color-name";
 import { loadLookResult, saveLookResult } from "@/lib/storage";
 import type { StoredLookResult } from "@/types";
 
@@ -96,6 +97,18 @@ export default function ResultPage(): JSX.Element {
             { label: "Accessories", value: result.accessories },
             { label: "Hairstyle", value: result.hairstyle }
           ]
+        : [],
+    [result]
+  );
+
+  const paletteItems = useMemo(
+    () =>
+      result
+        ? result.colorPalette.map((hex, index) => ({
+            id: `${hex}-${index}`,
+            hex,
+            name: getColorNameFromHex(hex)
+          }))
         : [],
     [result]
   );
@@ -185,10 +198,13 @@ export default function ResultPage(): JSX.Element {
             </CardHeader>
             <CardContent>
               <div className="palette-grid" ref={paletteRef}>
-                {result.colorPalette.map((color) => (
-                  <motion.div key={color} className="palette-chip" whileHover={{ y: -5 }}>
-                    <div className="palette-swatch" style={{ backgroundColor: color }} />
-                    <span>{color}</span>
+                {paletteItems.map((item) => (
+                  <motion.div key={item.id} className="palette-chip" whileHover={{ y: -5 }}>
+                    <div className="palette-swatch" style={{ backgroundColor: item.hex }} />
+                    <div className="palette-meta">
+                      <strong>{item.name}</strong>
+                      <span>{item.hex}</span>
+                    </div>
                   </motion.div>
                 ))}
               </div>
