@@ -24,6 +24,7 @@ const STEPS = [
   "Pick occasion and optional vibe",
   "Generate look recommendations"
 ];
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export default function UploadPage(): JSX.Element {
   const router = useRouter();
@@ -56,6 +57,11 @@ export default function UploadPage(): JSX.Element {
       return;
     }
 
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError("Image must be 5MB or smaller.");
+      return;
+    }
+
     setError("");
     setSelectedFile(file);
 
@@ -64,6 +70,16 @@ export default function UploadPage(): JSX.Element {
     }
 
     setPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearSelectedFile = () => {
+    if (previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setSelectedFile(null);
+    setPreviewUrl("");
+    setError("");
   };
 
   const triggerFileSelect = () => {
@@ -91,7 +107,8 @@ export default function UploadPage(): JSX.Element {
         ...result,
         occasion,
         styleVibe: styleVibe || "Auto",
-        previewUrl
+        previewUrl,
+        createdAt: new Date().toISOString()
       });
 
       router.push("/result");
@@ -142,6 +159,10 @@ export default function UploadPage(): JSX.Element {
             <CardContent className="upload-card-content">
               <div
                 className={`dropzone-modern ${isDragging ? "dropzone-modern--active" : ""}`}
+                role="button"
+                tabIndex={0}
+                aria-label="Image upload area"
+                aria-busy={isGenerating}
                 onDragEnter={(event) => {
                   event.preventDefault();
                   setIsDragging(true);
@@ -159,19 +180,30 @@ export default function UploadPage(): JSX.Element {
                   const dropped = event.dataTransfer.files?.[0] ?? null;
                   onFileSelected(dropped);
                 }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    triggerFileSelect();
+                  }
+                }}
               >
                 {previewUrl ? (
                   <div className="preview-wrapper">
                     <img className="preview-image" src={previewUrl} alt="Uploaded preview" />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={triggerFileSelect}
-                      className="preview-change"
-                    >
-                      <RefreshCcw size={15} />
-                      Upload New Photo
-                    </Button>
+                    <div className="preview-actions">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={triggerFileSelect}
+                        className="preview-change"
+                      >
+                        <RefreshCcw size={15} />
+                        Upload New Photo
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={clearSelectedFile}>
+                        Remove Photo
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="dropzone-empty">
@@ -188,9 +220,13 @@ export default function UploadPage(): JSX.Element {
                   className="sr-only-input"
                   type="file"
                   accept="image/*"
-                  onChange={(event) => onFileSelected(event.target.files?.[0] ?? null)}
+                  onChange={(event) => {
+                    onFileSelected(event.target.files?.[0] ?? null);
+                    event.currentTarget.value = "";
+                  }}
                 />
               </div>
+              <p className="muted-line">Accepted formats: JPG, PNG, WEBP. Max upload size: 5MB.</p>
 
               <div className="form-grid">
                 <label className="field">
@@ -222,8 +258,8 @@ export default function UploadPage(): JSX.Element {
           </Card>
 
           <div className="below-card-actions">
-            <Button type="button" size="lg" onClick={handleGenerate} disabled={isGenerating}>
-              {isGenerating ? "Generating..." : "Generate Photo"}
+            <Button type="button" size="lg" onClick={handleGenerate} disabled={isGenerating || !selectedFile}>
+              {isGenerating ? "Generating..." : "Generate Look"}
             </Button>
           </div>
         </SectionReveal>

@@ -307,6 +307,30 @@ a {
   gap: 0.85rem;
 }
 
+.session-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.session-card-content {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.session-time {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+}
+
+.empty-history-card {
+  max-width: 560px;
+}
+
 .card-icon {
   color: #0f5ecf;
 }
@@ -353,11 +377,20 @@ a {
   padding: 0.85rem;
   display: grid;
   place-items: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .dropzone-modern--active {
   border-color: rgba(14, 165, 233, 0.9);
   background: linear-gradient(180deg, #eff8ff, #e8f4ff);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14);
+}
+
+.dropzone-modern:focus-visible {
+  outline: none;
+  border-color: rgba(14, 165, 233, 0.9);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14);
 }
 
 .dropzone-empty {
@@ -377,6 +410,12 @@ a {
   width: 100%;
   display: grid;
   gap: 0.65rem;
+}
+
+.preview-actions {
+  justify-self: end;
+  display: inline-flex;
+  gap: 0.55rem;
 }
 
 .preview-image,

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import gsap from "gsap";
-import { Brain, Camera, RefreshCcw, Sparkles } from "lucide-react";
+import { Brain, Camera, Check, Copy, RefreshCcw, Sparkles } from "lucide-react";
 import { BackgroundBeams } from "@/components/aceternity/background-beams";
 import { Spotlight } from "@/components/aceternity/spotlight";
 import { Badge } from "@/components/ui/badge";
@@ -14,19 +14,64 @@ import { ImageMosaic } from "@/components/visual/image-mosaic";
 import { SectionReveal } from "@/components/visual/section-reveal";
 import { regenerateLook } from "@/lib/api";
 import { getColorNameFromHex } from "@/lib/color-name";
-import { loadLookResult, saveLookResult } from "@/lib/storage";
+import { loadLookHistory, loadLookResult, saveLookResult } from "@/lib/storage";
 import type { StoredLookResult } from "@/types";
+
+function formatSavedTime(timestamp?: string): string {
+  if (!timestamp) {
+    return "Saved recently";
+  }
+
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Saved recently";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(parsed);
+}
+
+function buildShareSummary(result: StoredLookResult): string {
+  return [
+    `FitAura Style Summary`,
+    `Occasion: ${result.occasion}`,
+    `Style vibe: ${result.styleVibe}`,
+    `Top wear: ${result.topWear}`,
+    `Bottom wear: ${result.bottomWear}`,
+    `Footwear: ${result.footwear}`,
+    `Accessories: ${result.accessories}`,
+    `Hairstyle: ${result.hairstyle}`,
+    `Palette: ${result.colorPalette.join(", ")}`,
+    `Confidence tip: ${result.confidenceTip}`
+  ].join("\n");
+}
 
 export default function ResultPage(): JSX.Element {
   const [result, setResult] = useState<StoredLookResult | null>(null);
+  const [history, setHistory] = useState<StoredLookResult[]>([]);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState("");
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const headlineRef = useRef<HTMLHeadingElement | null>(null);
   const paletteRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setResult(loadLookResult());
+    setHistory(loadLookHistory());
   }, []);
+
+  useEffect(() => {
+    if (copyState === "idle") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setCopyState("idle"), 1800);
+    return () => window.clearTimeout(timer);
+  }, [copyState]);
 
   useEffect(() => {
     if (!result) {
@@ -73,11 +118,13 @@ export default function ResultPage(): JSX.Element {
         ...regenerated,
         occasion: result.occasion,
         styleVibe: result.styleVibe,
-        previewUrl: result.previewUrl
+        previewUrl: result.previewUrl,
+        createdAt: new Date().toISOString()
       };
 
       setResult(updated);
       saveLookResult(updated);
+      setHistory(loadLookHistory());
     } catch (requestError) {
       const message =
         requestError instanceof Error ? requestError.message : "Unable to regenerate suggestions.";
@@ -112,6 +159,27 @@ export default function ResultPage(): JSX.Element {
         : [],
     [result]
   );
+
+  const shareSummary = useMemo(() => (result ? buildShareSummary(result) : ""), [result]);
+
+  const copySummary = async () => {
+    if (!shareSummary) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareSummary);
+      setCopyState("copied");
+    } catch {
+      setCopyState("error");
+    }
+  };
+
+  const openSavedSession = (session: StoredLookResult) => {
+    setResult(session);
+    saveLookResult(session);
+    setHistory(loadLookHistory());
+  };
 
   if (!result) {
     return (
@@ -223,6 +291,24 @@ export default function ResultPage(): JSX.Element {
               </p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Share-Ready Summary</CardTitle>
+              <CardDescription>Copy this quick breakdown to save or send to someone else.</CardDescription>
+            </CardHeader>
+            <CardContent className="share-summary">
+              <textarea readOnly value={shareSummary} aria-label="Style summary" />
+              <Button type="button" variant="secondary" onClick={copySummary}>
+                {copyState === "copied" ? <Check size={16} /> : <Copy size={16} />}
+                {copyState === "copied"
+                  ? "Copied"
+                  : copyState === "error"
+                    ? "Copy Failed"
+                    : "Copy Summary"}
+              </Button>
+            </CardContent>
+          </Card>
         </SectionReveal>
 
         <SectionReveal className="result-aside" delay={0.06}>
@@ -262,6 +348,34 @@ export default function ResultPage(): JSX.Element {
               <ImageMosaic bucket="result-board" count={12} labelPrefix="Reference" />
             </CardContent>
           </Card>
+
+          {history.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Sessions</CardTitle>
+                <CardDescription>Switch between your latest generated looks.</CardDescription>
+              </CardHeader>
+              <CardContent className="session-list">
+                {history.map((session) => {
+                  const isActive = session.createdAt === result.createdAt;
+
+                  return (
+                    <button
+                      key={`${session.createdAt}-${session.occasion}`}
+                      type="button"
+                      className={`session-item ${isActive ? "session-item--active" : ""}`}
+                      onClick={() => openSavedSession(session)}
+                      disabled={isActive}
+                    >
+                      <strong>{session.occasion}</strong>
+                      <span>{session.styleVibe} vibe</span>
+                      <p>{formatSavedTime(session.createdAt)}</p>
+                    </button>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
 
           {error && (
             <Card>

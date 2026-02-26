@@ -57,4 +57,5 @@ export interface StoredLookResult extends LookResult {
   occasion: string;
   styleVibe: string;
   previewUrl?: string;
+  createdAt?: string;
 }

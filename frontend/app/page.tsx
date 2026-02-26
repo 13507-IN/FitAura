@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import gsap from "gsap";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, Image as ImageIcon, Palette, Sparkles, Wand2 } from "lucide-react";
+import { ArrowRight, Clock3, Image as ImageIcon, Palette, Sparkles, Wand2 } from "lucide-react";
 import { BackgroundBeams } from "@/components/aceternity/background-beams";
 import { Spotlight } from "@/components/aceternity/spotlight";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageMosaic } from "@/components/visual/image-mosaic";
 import { SectionReveal } from "@/components/visual/section-reveal";
+import { loadLookHistory, saveLookResult } from "@/lib/storage";
+import type { StoredLookResult } from "@/types";
 
 interface Feature {
   title: string;
@@ -44,9 +47,29 @@ const STATS = [
   { value: "3 layers", label: "AI + motion + UI" }
 ];
 
+function formatSavedTime(timestamp?: string): string {
+  if (!timestamp) {
+    return "Saved recently";
+  }
+
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Saved recently";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(parsed);
+}
+
 export default function LandingPage(): JSX.Element {
+  const router = useRouter();
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const statsRef = useRef<HTMLDivElement | null>(null);
+  const [recentLooks, setRecentLooks] = useState<StoredLookResult[]>([]);
 
   useEffect(() => {
     const context = gsap.context(() => {
@@ -69,6 +92,15 @@ export default function LandingPage(): JSX.Element {
 
     return () => context.revert();
   }, []);
+
+  useEffect(() => {
+    setRecentLooks(loadLookHistory().slice(0, 3));
+  }, []);
+
+  const openSavedSession = (session: StoredLookResult) => {
+    saveLookResult(session);
+    router.push("/result");
+  };
 
   return (
     <main className="site-page">
@@ -136,6 +168,46 @@ export default function LandingPage(): JSX.Element {
             </motion.div>
           ))}
         </div>
+      </SectionReveal>
+
+      <SectionReveal className="content-section">
+        <div className="section-top">
+          <Badge variant="secondary">Recent Sessions</Badge>
+          <h2>Reopen your latest style sessions instantly.</h2>
+        </div>
+        {recentLooks.length > 0 ? (
+          <div className="session-grid">
+            {recentLooks.map((session) => (
+              <Card key={`${session.createdAt}-${session.occasion}`}>
+                <CardHeader>
+                  <CardTitle>{session.occasion}</CardTitle>
+                  <CardDescription>{session.styleVibe} vibe</CardDescription>
+                </CardHeader>
+                <CardContent className="session-card-content">
+                  <p className="session-time">
+                    <Clock3 size={14} />
+                    {formatSavedTime(session.createdAt)}
+                  </p>
+                  <Button type="button" variant="secondary" onClick={() => openSavedSession(session)}>
+                    Open In Results
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="empty-history-card">
+            <CardHeader>
+              <CardTitle>No sessions yet</CardTitle>
+              <CardDescription>Generate your first look and it will show up here for quick access.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild size="lg">
+                <Link href="/upload">Start Your First Session</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       </SectionReveal>
     </main>
   );
