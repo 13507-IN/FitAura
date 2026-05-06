@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, RefreshCcw, Sparkles, Wand2 } from "lucide-react";
+import { Camera, Info, RefreshCcw, ShieldCheck, Sparkles, Wand2 } from "lucide-react";
 import { BackgroundBeams } from "@/components/aceternity/background-beams";
 import { Spotlight } from "@/components/aceternity/spotlight";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageMosaic } from "@/components/visual/image-mosaic";
+import { ProgressSteps } from "@/components/ui/progress-steps";
 import { SectionReveal } from "@/components/visual/section-reveal";
 import { analyzeLook } from "@/lib/api";
 import { saveLookResult } from "@/lib/storage";
@@ -34,6 +35,7 @@ export default function UploadPage(): JSX.Element {
   const [styleVibe, setStyleVibe] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStep, setGenerationStep] = useState(0);
   const [error, setError] = useState<string>("");
   const [previewUrl, setPreviewUrl] = useState<string>("");
 
@@ -94,6 +96,7 @@ export default function UploadPage(): JSX.Element {
 
     setError("");
     setIsGenerating(true);
+    setGenerationStep(0);
 
     try {
       const formData = new FormData();
@@ -101,7 +104,15 @@ export default function UploadPage(): JSX.Element {
       formData.append("occasion", occasion);
       formData.append("styleVibe", styleVibe);
 
+      const stepInterval = window.setInterval(() => {
+        setGenerationStep((prev) => Math.min(prev + 1, 4));
+      }, 600);
+
       const result = await analyzeLook(formData);
+      clearInterval(stepInterval);
+      setGenerationStep(4);
+
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
 
       saveLookResult({
         ...result,
@@ -118,6 +129,7 @@ export default function UploadPage(): JSX.Element {
       setError(message);
     } finally {
       setIsGenerating(false);
+      setGenerationStep(0);
     }
   };
 
@@ -226,7 +238,16 @@ export default function UploadPage(): JSX.Element {
                   }}
                 />
               </div>
-              <p className="muted-line">Accepted formats: JPG, PNG, WEBP. Max upload size: 5MB.</p>
+                <p className="muted-line">Accepted formats: JPG, PNG, WEBP. Max upload size: 5MB.</p>
+
+                <div className="photo-guidance">
+                  <strong>Photo Tips:</strong>
+                  <ul>
+                    <li>Use a clear, well-lit full-body or waist-up photo</li>
+                    <li>Neutral pose with arms slightly away from body</li>
+                    <li>Avoid heavy filters or dark shadows</li>
+                  </ul>
+                </div>
 
               <div className="form-grid">
                 <label className="field">
@@ -253,7 +274,9 @@ export default function UploadPage(): JSX.Element {
                 </label>
               </div>
 
-              {error && <p className="error-line">{error}</p>}
+               {error && <p className="error-line">{error}</p>}
+
+              {isGenerating && <ProgressSteps currentStep={generationStep} />}
             </CardContent>
           </Card>
 
@@ -278,9 +301,14 @@ export default function UploadPage(): JSX.Element {
                 </div>
               ))}
               <div className="tip-note">
-                <Sparkles size={16} />
-                Better lighting and a neutral pose improve color + shape detection quality.
-              </div>
+                 <Sparkles size={16} />
+                 Better lighting and a neutral pose improve color + shape detection quality.
+               </div>
+
+               <div className="tip-note tip-note--privacy">
+                 <ShieldCheck size={16} />
+                 Your photo is processed in-memory and never stored on our servers.
+               </div>
             </CardContent>
           </Card>
 
