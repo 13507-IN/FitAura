@@ -1,4 +1,4 @@
-import type { AIAnalysis, LookResult } from "@/types";
+import type { AIAnalysis, LookResult, WardrobeItem } from "@/types";
 
 const FALLBACK_API_BASE = "http://localhost:8080";
 
@@ -44,6 +44,19 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
 export async function analyzeLook(formData: FormData): Promise<LookResult> {
   const response = await fetch(`${API_BASE}/api/analyze`, {
+    method: "POST",
+    body: formData
+  });
+
+  const data = await parseResponse<{ success: boolean; data: LookResult; analysis?: AIAnalysis }>(response);
+  return {
+    ...data.data,
+    analysis: data.analysis
+  };
+}
+
+export async function analyzeMultiPhoto(formData: FormData): Promise<LookResult> {
+  const response = await fetch(`${API_BASE}/api/analyze-multi`, {
     method: "POST",
     body: formData
   });

@@ -59,3 +59,50 @@ export interface StoredLookResult extends LookResult {
   previewUrl?: string;
   createdAt?: string;
 }
+
+export type WardrobeCategory = "tops" | "bottoms" | "footwear" | "accessories" | "outerwear";
+export type ClothingGender = "men" | "women" | "unisex";
+
+export interface WardrobeItem {
+  id: string;
+  name: string;
+  category: WardrobeCategory;
+  color: string;
+  colors: string[];
+  brand?: string;
+  gender: ClothingGender;
+  occasion?: string;
+  styleVibe?: string;
+  addedAt: string;
+}
+
+export interface ShoppingLink {
+  retailer: string;
+  productName: string;
+  price?: string;
+  url: string;
+  imageUrl?: string;
+}
+
+export interface LookResult {
+  topWear: string;
+  bottomWear: string;
+  footwear: string;
+  accessories: string;
+  hairstyle: string;
+  colorPalette: string[];
+  confidenceTip: string;
+  analysis?: AIAnalysis;
+  shoppingLinks?: {
+    topWear?: ShoppingLink;
+    bottomWear?: ShoppingLink;
+    footwear?: ShoppingLink;
+    accessories?: ShoppingLink;
+  };
+  wardrobeMatches?: {
+    topWear?: string;
+    bottomWear?: string;
+    footwear?: string;
+    accessories?: string;
+  };
+}
