@@ -1,5 +1,28 @@
 import { hashTextToIndex } from "../utils/hash.js";
 
+const SHOPPING_AFFILIATES = {
+  topWear: [
+    { retailer: "Amazon", baseUrl: "https://amazon.com/s?k=", affiliateTag: "&tag=fitaura-20" },
+    { retailer: "Zara", baseUrl: "https://www.zara.com/us/en/search?searchTerm=", affiliateTag: "" },
+    { retailer: "H&M", baseUrl: "https://www2.hm.com/en_us/searchpage.html?q=", affiliateTag: "" }
+  ],
+  bottomWear: [
+    { retailer: "Amazon", baseUrl: "https://amazon.com/s?k=", affiliateTag: "&tag=fitaura-20" },
+    { retailer: "Levi's", baseUrl: "https://www.levi.com/US/en_US/search?q=", affiliateTag: "" },
+    { retailer: "H&M", baseUrl: "https://www2.hm.com/en_us/searchpage.html?q=", affiliateTag: "" }
+  ],
+  footwear: [
+    { retailer: "Amazon", baseUrl: "https://amazon.com/s?k=", affiliateTag: "&tag=fitaura-20" },
+    { retailer: "Nike", baseUrl: "https://www.nike.com/w?q=", affiliateTag: "" },
+    { retailer: "Adidas", baseUrl: "https://www.adidas.com/us/search?q=", affiliateTag: "" }
+  ],
+  accessories: [
+    { retailer: "Amazon", baseUrl: "https://amazon.com/s?k=", affiliateTag: "&tag=fitaura-20" },
+    { retailer: "Nordstrom", baseUrl: "https://www.nordstrom.com/sr?keyword=", affiliateTag: "" },
+    { retailer: "Macy's", baseUrl: "https://www.macys.com/shop/search?keyword=", affiliateTag: "" }
+  ]
+};
+
 const OCCASION_RULES = {
   College: {
     top: ["Relaxed fit tee + overshirt", "Solid polo + lightweight bomber", "Henley + denim jacket"],
@@ -133,7 +156,54 @@ function buildDemographicStylingCue(demographicData) {
   return [ageCue, genderCue].filter((text) => text.length > 0).join(" ");
 }
 
-export function buildLookRecommendations({ occasion, styleVibe, analysis, variantToken }) {
+function findWardrobeMatch(recommendation, wardrobeItems, category) {
+  if (!wardrobeItems || wardrobeItems.length === 0) return null;
+
+  const categoryMap = {
+    topWear: "tops",
+    bottomWear: "bottoms",
+    footwear: "footwear",
+    accessories: "accessories"
+  };
+
+  const wardrobeCategory = categoryMap[category];
+  if (!wardrobeCategory) return null;
+
+  const matches = wardrobeItems.filter(item => item.category === wardrobeCategory);
+  if (matches.length === 0) return null;
+
+  const match = matches[0];
+  return `Your ${match.name} (${match.color})`;
+}
+
+export function buildShoppingLinks(suggestions, occasion, styleVibe) {
+  const links = {};
+
+  const buildSearchTerm = (item, category) => {
+    const words = item.split(" ").slice(0, 4).join("+");
+    return words;
+  };
+
+  const categories = ["topWear", "bottomWear", "footwear", "accessories"];
+  categories.forEach(cat => {
+    const item = suggestions[cat];
+    if (!item) return;
+
+    const searchTerm = buildSearchTerm(item, cat);
+    const affiliateRetailers = SHOPPING_AFFILIATES[cat] || SHOPPING_AFFILIATES.accessories;
+
+    links[cat] = affiliateRetailers.map(retailer => ({
+      retailer: retailer.retailer,
+      productName: item,
+      url: `${retailer.baseUrl}${searchTerm}${retailer.affiliateTag || ""}`,
+      price: undefined
+    }))[0] || { retailer: "Search", productName: item, url: `https://www.google.com/search?q=${searchTerm}+buy` };
+  });
+
+  return links;
+}
+
+export function buildLookRecommendations({ occasion, styleVibe, analysis, variantToken, wardrobe }) {
   const vibe = styleVibe && styleVibe !== "" ? styleVibe : "Auto";
   const rules = OCCASION_RULES[occasion];
   const accents = STYLE_ACCENT[vibe] ?? STYLE_ACCENT.Auto;
@@ -153,6 +223,13 @@ export function buildLookRecommendations({ occasion, styleVibe, analysis, varian
     .filter((text) => typeof text === "string" && text.trim().length > 0)
     .join(" ");
 
+  const wardrobeMatches = {
+    topWear: findWardrobeMatch(topWear, wardrobe, "topWear"),
+    bottomWear: findWardrobeMatch(bottomWear, wardrobe, "bottomWear"),
+    footwear: findWardrobeMatch(footwear, wardrobe, "footwear"),
+    accessories: findWardrobeMatch(accessories, wardrobe, "accessories")
+  };
+
   return {
     topWear,
     bottomWear,
@@ -160,6 +237,7 @@ export function buildLookRecommendations({ occasion, styleVibe, analysis, varian
     accessories,
     hairstyle,
     colorPalette: analysis.colorData.palette,
-    confidenceTip
+    confidenceTip,
+    wardrobeMatches: Object.values(wardrobeMatches).some(Boolean) ? wardrobeMatches : undefined
   };
 }
