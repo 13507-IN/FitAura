@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import gsap from "gsap";
-import { Brain, Camera, Check, ChevronDown, Copy, RefreshCcw, Sparkles } from "lucide-react";
+import { Brain, Camera, Check, ChevronDown, Copy, RefreshCcw, Shirt, Sparkles } from "lucide-react";
 import { BackgroundBeams } from "@/components/aceternity/background-beams";
 import { Spotlight } from "@/components/aceternity/spotlight";
 import { Badge } from "@/components/ui/badge";
@@ -161,6 +161,9 @@ export default function ResultPage(): JSX.Element {
     [result]
   );
 
+  const shoppingLinks = useMemo(() => result?.shoppingLinks ?? {}, [result]);
+  const wardrobeMatches = useMemo(() => result?.wardrobeMatches ?? {}, [result]);
+
   const copyColorHex = async (hex: string) => {
     try {
       await navigator.clipboard.writeText(hex);
@@ -259,14 +262,48 @@ export default function ResultPage(): JSX.Element {
               <CardDescription>Core items selected by FitAura for this styling profile.</CardDescription>
             </CardHeader>
             <CardContent className="result-listing">
-              {outfitItems.map((item) => (
-                <div className="result-line" key={item.label}>
-                  <span>{item.label}</span>
-                  <p>{item.value}</p>
-                </div>
-              ))}
+              {outfitItems.map((item) => {
+                const key = item.label.toLowerCase().replace(/\s/g, '') as keyof typeof wardrobeMatches;
+                const match = wardrobeMatches[key as keyof typeof wardrobeMatches];
+                return (
+                  <div className="result-line" key={item.label}>
+                    <span>{item.label}</span>
+                    <p>{item.value}</p>
+                    {match && (
+                      <p className="wardrobe-match">
+                        <Shirt size={12} />
+                        Wardrobe: {match}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
+
+          {Object.keys(shoppingLinks).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Shop This Look</CardTitle>
+                <CardDescription>Affiliate links to buy recommended items.</CardDescription>
+              </CardHeader>
+              <CardContent className="shopping-links">
+                {Object.entries(shoppingLinks).map(([category, link]: [string, any]) => (
+                  <a
+                    key={category}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shopping-link"
+                  >
+                    <strong>{category.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</strong>
+                    <span>{link.productName}</span>
+                    <span className="shopping-link__retailer">{link.retailer}</span>
+                  </a>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
