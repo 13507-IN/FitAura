@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import gsap from "gsap";
-import { Brain, Camera, Check, Copy, RefreshCcw, Sparkles } from "lucide-react";
+import { Brain, Camera, Check, ChevronDown, Copy, RefreshCcw, Sparkles } from "lucide-react";
 import { BackgroundBeams } from "@/components/aceternity/background-beams";
 import { Spotlight } from "@/components/aceternity/spotlight";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +56,7 @@ export default function ResultPage(): JSX.Element {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState("");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const headlineRef = useRef<HTMLHeadingElement | null>(null);
   const paletteRef = useRef<HTMLDivElement | null>(null);
 
@@ -160,6 +161,14 @@ export default function ResultPage(): JSX.Element {
     [result]
   );
 
+  const copyColorHex = async (hex: string) => {
+    try {
+      await navigator.clipboard.writeText(hex);
+    } catch {
+      // Silently fail if clipboard API is not available
+    }
+  };
+
   const shareSummary = useMemo(() => (result ? buildShareSummary(result) : ""), [result]);
 
   const copySummary = async () => {
@@ -261,26 +270,6 @@ export default function ResultPage(): JSX.Element {
 
           <Card>
             <CardHeader>
-              <CardTitle>Recommended Palette</CardTitle>
-              <CardDescription>Use these colors as your matching foundation.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="palette-grid" ref={paletteRef}>
-                {paletteItems.map((item) => (
-                  <motion.div key={item.id} className="palette-chip" whileHover={{ y: -5 }}>
-                    <div className="palette-swatch" style={{ backgroundColor: item.hex }} />
-                    <div className="palette-meta">
-                      <strong>{item.name}</strong>
-                      <span>{item.hex}</span>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle>Confidence Tip</CardTitle>
               <CardDescription>Simple action to elevate your final appearance.</CardDescription>
             </CardHeader>
@@ -289,6 +278,33 @@ export default function ResultPage(): JSX.Element {
                 <Sparkles size={16} />
                 {result.confidenceTip}
               </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recommended Palette</CardTitle>
+              <CardDescription>Use these colors as your matching foundation.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="palette-grid" ref={paletteRef}>
+                {paletteItems.map((item) => (
+                  <motion.div key={item.id} className="palette-chip" whileHover={{ y: -5 }}>
+                    <button
+                      type="button"
+                      className="palette-swatch"
+                      style={{ backgroundColor: item.hex }}
+                      onClick={() => copyColorHex(item.hex)}
+                      title={`Copy ${item.hex}`}
+                      aria-label={`Copy color ${item.name}: ${item.hex}`}
+                    />
+                    <div className="palette-meta">
+                      <strong>{item.name}</strong>
+                      <span>{item.hex}</span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
             </CardContent>
           </Card>
 
@@ -315,27 +331,46 @@ export default function ResultPage(): JSX.Element {
           {result.analysis && (
             <Card>
               <CardHeader>
-                <CardTitle>AI Analysis Snapshot</CardTitle>
+                <button
+                  type="button"
+                  className="analysis-toggle"
+                  onClick={() => setShowAnalysis(!showAnalysis)}
+                  aria-expanded={showAnalysis}
+                >
+                  <CardTitle>AI Analysis Snapshot</CardTitle>
+                  <ChevronDown
+                    size={16}
+                    className={`analysis-toggle__icon ${showAnalysis ? "analysis-toggle__icon--open" : ""}`}
+                  />
+                </button>
                 <CardDescription>Signals extracted from image analysis engines.</CardDescription>
               </CardHeader>
-              <CardContent className="analysis-grid">
-                <p>
-                  <Brain size={16} />
-                  Face shape: {result.analysis.face.shape}
-                </p>
-                <p>
-                  <Camera size={16} />
-                  Body silhouette: {result.analysis.body.silhouette}
-                </p>
-                <p>
-                  <Sparkles size={16} />
-                  Tone: {result.analysis.color.skinTone} ({result.analysis.color.undertone})
-                </p>
-                <p>
-                  <RefreshCcw size={16} />
-                  Overall confidence: {Math.round(result.analysis.overallConfidence * 100)}%
-                </p>
-              </CardContent>
+              {showAnalysis && (
+                <CardContent className="analysis-grid">
+                  <p>
+                    <Brain size={16} />
+                    Face shape: {result.analysis.face.shape}
+                    <span className="confidence-badge">
+                      {Math.round(result.analysis.face.confidence * 100)}%
+                    </span>
+                  </p>
+                  <p>
+                    <Camera size={16} />
+                    Body silhouette: {result.analysis.body.silhouette}
+                    <span className="confidence-badge">
+                      {Math.round(result.analysis.body.confidence * 100)}%
+                    </span>
+                  </p>
+                  <p>
+                    <Sparkles size={16} />
+                    Tone: {result.analysis.color.skinTone} ({result.analysis.color.undertone})
+                  </p>
+                  <p>
+                    <RefreshCcw size={16} />
+                    Overall confidence: {Math.round(result.analysis.overallConfidence * 100)}%
+                  </p>
+                </CardContent>
+              )}
             </Card>
           )}
 
