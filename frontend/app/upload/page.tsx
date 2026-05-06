@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Info, RefreshCcw, ShieldCheck, Sparkles, Wand2 } from "lucide-react";
+import { Camera, Info, LayoutGrid, RefreshCw, ShieldCheck, Sparkles, Wand2 } from "lucide-react";
 import { BackgroundBeams } from "@/components/aceternity/background-beams";
 import { Spotlight } from "@/components/aceternity/spotlight";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +12,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ImageMosaic } from "@/components/visual/image-mosaic";
 import { ProgressSteps } from "@/components/ui/progress-steps";
 import { SectionReveal } from "@/components/visual/section-reveal";
-import { analyzeLook } from "@/lib/api";
-import { saveLookResult } from "@/lib/storage";
+import { analyzeLook, analyzeMultiPhoto } from "@/lib/api";
+import { loadLookResult, saveLookResult } from "@/lib/storage";
+import { loadWardrobe } from "@/lib/storage";
 import { OCCASIONS, STYLE_VIBES } from "@/types";
 
 function isImage(file: File): boolean {
@@ -30,58 +31,72 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 export default function UploadPage(): JSX.Element {
   const router = useRouter();
   const hiddenFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [occasion, setOccasion] = useState<string>(OCCASIONS[0]);
   const [styleVibe, setStyleVibe] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
   const [error, setError] = useState<string>("");
-  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
 
-  const inspirationCount = useMemo(() => (previewUrl ? 12 : 8), [previewUrl]);
+  const inspirationCount = useMemo(() => (previewUrls.length > 0 ? 12 : 8), [previewUrls]);
 
   useEffect(() => {
     return () => {
-      if (previewUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(previewUrl);
-      }
+      previewUrls.forEach(url => {
+        if (url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
     };
-  }, [previewUrl]);
+  }, [previewUrls]);
 
-  const onFileSelected = (file: File | null) => {
-    if (!file) {
-      return;
-    }
+  const onFilesSelected = (files: File[]) => {
+    const validFiles = files.filter(file => {
+      if (!isImage(file)) {
+        setError("Please upload valid image files only.");
+        return false;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError(`Image ${file.name} must be 5MB or smaller.`);
+        return false;
+      }
+      return true;
+    }).slice(0, 3);
 
-    if (!isImage(file)) {
-      setError("Please upload a valid image file.");
-      return;
-    }
-
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError("Image must be 5MB or smaller.");
-      return;
-    }
+    if (validFiles.length === 0) return;
 
     setError("");
-    setSelectedFile(file);
+    previewUrls.forEach(url => {
+      if (url.startsWith("blob:")) {
+        URL.revokeObjectURL(url);
+      }
+    });
 
-    if (previewUrl.startsWith("blob:")) {
-      URL.revokeObjectURL(previewUrl);
-    }
-
-    setPreviewUrl(URL.createObjectURL(file));
+    setSelectedFiles(prev => [...prev, ...validFiles].slice(0, 3));
+    const newUrls = validFiles.map(file => URL.createObjectURL(file));
+    setPreviewUrls(prev => [...prev, ...newUrls].slice(0, 3));
   };
 
-  const clearSelectedFile = () => {
-    if (previewUrl.startsWith("blob:")) {
-      URL.revokeObjectURL(previewUrl);
-    }
-
-    setSelectedFile(null);
-    setPreviewUrl("");
+  const clearAllFiles = () => {
+    previewUrls.forEach(url => {
+      if (url.startsWith("blob:")) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    setSelectedFiles([]);
+    setPreviewUrls([]);
     setError("");
+  };
+
+  const removeFile = (index: number) => {
+    const urlToRemove = previewUrls[index];
+    if (urlToRemove?.startsWith("blob:")) {
+      URL.revokeObjectURL(urlToRemove);
+    }
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
   };
 
   const triggerFileSelect = () => {
@@ -89,8 +104,8 @@ export default function UploadPage(): JSX.Element {
   };
 
   const handleGenerate = async () => {
-    if (!selectedFile) {
-      setError("Add a photo before generating recommendations.");
+    if (selectedFiles.length === 0) {
+      setError("Add at least one photo before generating recommendations.");
       return;
     }
 
@@ -99,16 +114,30 @@ export default function UploadPage(): JSX.Element {
     setGenerationStep(0);
 
     try {
-      const formData = new FormData();
-      formData.append("image", selectedFile);
-      formData.append("occasion", occasion);
-      formData.append("styleVibe", styleVibe);
+      const wardrobe = loadWardrobe();
 
       const stepInterval = window.setInterval(() => {
         setGenerationStep((prev) => Math.min(prev + 1, 4));
       }, 600);
 
-      const result = await analyzeLook(formData);
+      let result;
+      if (selectedFiles.length === 1) {
+        const formData = new FormData();
+        formData.append("image", selectedFiles[0]);
+        formData.append("occasion", occasion);
+        formData.append("styleVibe", styleVibe);
+        result = await analyzeLook(formData);
+      } else {
+        const formData = new FormData();
+        selectedFiles.forEach((file) => {
+          formData.append("images", file);
+        });
+        formData.append("occasion", occasion);
+        formData.append("styleVibe", styleVibe);
+        formData.append("wardrobe", JSON.stringify(wardrobe));
+        result = await analyzeMultiPhoto(formData);
+      }
+
       clearInterval(stepInterval);
       setGenerationStep(4);
 
@@ -118,7 +147,7 @@ export default function UploadPage(): JSX.Element {
         ...result,
         occasion,
         styleVibe: styleVibe || "Auto",
-        previewUrl,
+        previewUrl: previewUrls[0] || "",
         createdAt: new Date().toISOString()
       });
 
@@ -165,7 +194,7 @@ export default function UploadPage(): JSX.Element {
             <CardHeader>
               <CardTitle>Photo + Styling Controls</CardTitle>
               <CardDescription>
-                Drag and drop your image, then set the event and vibe you want to project.
+                Drag and drop your images (up to 3), then set the event and vibe you want to project.
               </CardDescription>
             </CardHeader>
             <CardContent className="upload-card-content">
@@ -189,8 +218,8 @@ export default function UploadPage(): JSX.Element {
                 onDrop={(event) => {
                   event.preventDefault();
                   setIsDragging(false);
-                  const dropped = event.dataTransfer.files?.[0] ?? null;
-                  onFileSelected(dropped);
+                  const dropped = Array.from(event.dataTransfer.files || []).slice(0, 3);
+                  onFilesSelected(dropped);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -199,31 +228,47 @@ export default function UploadPage(): JSX.Element {
                   }
                 }}
               >
-                {previewUrl ? (
+                {previewUrls.length > 0 ? (
                   <div className="preview-wrapper">
-                    <img className="preview-image" src={previewUrl} alt="Uploaded preview" />
+                    <div className="multi-preview">
+                      {previewUrls.map((url, idx) => (
+                        <div key={url} className="multi-preview__item">
+                          <img className="preview-image" src={url} alt={`Uploaded preview ${idx + 1}`} />
+                          <button
+                            type="button"
+                            className="multi-preview__remove"
+                            onClick={() => removeFile(idx)}
+                            aria-label={`Remove photo ${idx + 1}`}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                     <div className="preview-actions">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={triggerFileSelect}
-                        className="preview-change"
-                      >
-                        <RefreshCcw size={15} />
-                        Upload New Photo
-                      </Button>
-                      <Button type="button" variant="ghost" onClick={clearSelectedFile}>
-                        Remove Photo
+                      {selectedFiles.length < 3 && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={triggerFileSelect}
+                          className="preview-change"
+                        >
+                          <RefreshCw size={15} />
+                          Add Another Photo
+                        </Button>
+                      )}
+                      <Button type="button" variant="ghost" onClick={clearAllFiles}>
+                        Remove All
                       </Button>
                     </div>
                   </div>
                 ) : (
                   <div className="dropzone-empty">
                     <Camera size={28} />
-                    <strong>Drop your image here</strong>
-                    <p>or select one manually</p>
+                    <strong>Drop your images here</strong>
+                    <p>or select them manually (up to 3 photos)</p>
                     <Button type="button" variant="secondary" onClick={triggerFileSelect}>
-                      Upload Photo
+                      Upload Photos
                     </Button>
                   </div>
                 )}
@@ -232,22 +277,24 @@ export default function UploadPage(): JSX.Element {
                   className="sr-only-input"
                   type="file"
                   accept="image/*"
+                  multiple
                   onChange={(event) => {
-                    onFileSelected(event.target.files?.[0] ?? null);
+                    const files = Array.from(event.target.files || []);
+                    onFilesSelected(files);
                     event.currentTarget.value = "";
                   }}
                 />
               </div>
-                <p className="muted-line">Accepted formats: JPG, PNG, WEBP. Max upload size: 5MB.</p>
+              <p className="muted-line">Accepted formats: JPG, PNG, WEBP. Max upload size: 5MB per file.</p>
 
-                <div className="photo-guidance">
-                  <strong>Photo Tips:</strong>
-                  <ul>
-                    <li>Use a clear, well-lit full-body or waist-up photo</li>
-                    <li>Neutral pose with arms slightly away from body</li>
-                    <li>Avoid heavy filters or dark shadows</li>
-                  </ul>
-                </div>
+              <div className="photo-guidance">
+                <strong>Photo Tips:</strong>
+                <ul>
+                  <li>Use a clear, well-lit full-body or waist-up photo</li>
+                  <li>Neutral pose with arms slightly away from body</li>
+                  <li>Avoid heavy filters or dark shadows</li>
+                </ul>
+              </div>
 
               <div className="form-grid">
                 <label className="field">
@@ -274,15 +321,21 @@ export default function UploadPage(): JSX.Element {
                 </label>
               </div>
 
-               {error && <p className="error-line">{error}</p>}
+              {error && <p className="error-line">{error}</p>}
 
               {isGenerating && <ProgressSteps currentStep={generationStep} />}
             </CardContent>
           </Card>
 
           <div className="below-card-actions">
-            <Button type="button" size="lg" onClick={handleGenerate} disabled={isGenerating || !selectedFile}>
+            <Button type="button" size="lg" onClick={handleGenerate} disabled={isGenerating || selectedFiles.length === 0}>
               {isGenerating ? "Generating..." : "Generate Look"}
+            </Button>
+            <Button asChild variant="secondary" size="lg">
+              <Link href="/wardrobe">
+                <LayoutGrid size={16} />
+                My Wardrobe
+              </Link>
             </Button>
           </div>
         </SectionReveal>
@@ -301,14 +354,13 @@ export default function UploadPage(): JSX.Element {
                 </div>
               ))}
               <div className="tip-note">
-                 <Sparkles size={16} />
-                 Better lighting and a neutral pose improve color + shape detection quality.
-               </div>
-
-               <div className="tip-note tip-note--privacy">
-                 <ShieldCheck size={16} />
-                 Your photo is processed in-memory and never stored on our servers.
-               </div>
+                <Sparkles size={16} />
+                Better lighting and a neutral pose improve color + shape detection quality.
+              </div>
+              <div className="tip-note tip-note--privacy">
+                <ShieldCheck size={16} />
+                Your photo is processed in-memory and never stored on our servers.
+              </div>
             </CardContent>
           </Card>
 
