@@ -36,6 +36,7 @@ export default function RootLayout({
               </Link>
               <nav className="site-nav">
                 <Link href="/upload">Upload</Link>
+                <Link href="/wardrobe">Wardrobe</Link>
                 <Link href="/result">Result</Link>
               </nav>
             </div>
@@ -49,6 +50,7 @@ export default function RootLayout({
               <div className="site-footer__links">
                 <Link href="/">Home</Link>
                 <Link href="/upload">Generate</Link>
+                <Link href="/wardrobe">Wardrobe</Link>
               </div>
             </div>
           </footer>

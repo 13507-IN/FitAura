@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Closet, Plus, Trash2, Shirt, Footprints, Glasses, CloudDrizzle } from "lucide-react";
+import { Plus, Trash2, Shirt, Footprints, Glasses, CloudDrizzle } from "lucide-react";
 import { BackgroundBeams } from "@/components/aceternity/background-beams";
 import { Spotlight } from "@/components/aceternity/spotlight";
 import { Badge } from "@/components/ui/badge";

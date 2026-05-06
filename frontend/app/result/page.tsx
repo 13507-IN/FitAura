@@ -254,6 +254,9 @@ export default function ResultPage(): JSX.Element {
             <Button asChild variant="secondary" size="lg">
               <Link href="/upload">Alternate Photo</Link>
             </Button>
+            <Button asChild variant="ghost" size="lg">
+              <Link href="/wardrobe">My Wardrobe</Link>
+            </Button>
           </div>
 
           <Card>
