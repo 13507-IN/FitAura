@@ -248,15 +248,24 @@ export default function ResultPage(): JSX.Element {
           </Card>
 
           <div className="below-card-actions">
-            <Button type="button" size="lg" onClick={handleRegenerate} disabled={isRegenerating}>
-              {isRegenerating ? "Regenerating..." : "Regenerate Photo"}
-            </Button>
-            <Button asChild variant="secondary" size="lg">
-              <Link href="/upload">Alternate Photo</Link>
-            </Button>
-            <Button asChild variant="ghost" size="lg">
-              <Link href="/wardrobe">My Wardrobe</Link>
-            </Button>
+            <div className="tutorial-hint-wrapper">
+              <Button type="button" size="lg" onClick={handleRegenerate} disabled={isRegenerating}>
+                {isRegenerating ? "Regenerating..." : "Regenerate Photo"}
+              </Button>
+              <span className="tutorial-hint">Get a fresh variation of this look</span>
+            </div>
+            <div className="tutorial-hint-wrapper">
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/upload">Alternate Photo</Link>
+              </Button>
+              <span className="tutorial-hint">Try a different photo</span>
+            </div>
+            <div className="tutorial-hint-wrapper">
+              <Button asChild variant="ghost" size="lg">
+                <Link href="/wardrobe">My Wardrobe</Link>
+              </Button>
+              <span className="tutorial-hint">See your saved clothes</span>
+            </div>
           </div>
 
           <Card>

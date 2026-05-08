@@ -103,6 +103,15 @@ export default function UploadPage(): JSX.Element {
     hiddenFileInputRef.current?.click();
   };
 
+  function readFileAsDataURL(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   const handleGenerate = async () => {
     if (selectedFiles.length === 0) {
       setError("Add at least one photo before generating recommendations.");
@@ -143,11 +152,13 @@ export default function UploadPage(): JSX.Element {
 
       await new Promise((resolve) => window.setTimeout(resolve, 400));
 
+      const dataUrl = selectedFiles[0] ? await readFileAsDataURL(selectedFiles[0]) : "";
+
       saveLookResult({
         ...result,
         occasion,
         styleVibe: styleVibe || "Auto",
-        previewUrl: previewUrls[0] || "",
+        previewUrl: dataUrl,
         createdAt: new Date().toISOString()
       });
 

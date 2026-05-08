@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Shirt, Footprints, Glasses, CloudDrizzle } from "lucide-react";
+import { Plus, Trash2, Shirt, Footprints, Glasses, CloudDrizzle, Info } from "lucide-react";
 import { BackgroundBeams } from "@/components/aceternity/background-beams";
 import { Spotlight } from "@/components/aceternity/spotlight";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,15 @@ function generateId(): string {
   return `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function WardrobePage(): JSX.Element {
   const router = useRouter();
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>([]);
@@ -46,11 +55,22 @@ export default function WardrobePage(): JSX.Element {
     gender: "women" as ClothingGender,
     occasion: "",
     styleVibe: "",
+    imageUrl: "",
   });
+  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     setWardrobe(loadWardrobe());
+    const seen = localStorage.getItem("fitaura:wardrobe-tutorial-seen");
+    if (!seen) {
+      setShowTutorial(true);
+    }
   }, []);
+
+  const dismissTutorial = () => {
+    setShowTutorial(false);
+    localStorage.setItem("fitaura:wardrobe-tutorial-seen", "true");
+  };
 
   const resetForm = () => {
     setForm({
@@ -62,6 +82,7 @@ export default function WardrobePage(): JSX.Element {
       gender: "women",
       occasion: "",
       styleVibe: "",
+      imageUrl: "",
     });
     setEditingItem(null);
     setShowForm(false);
@@ -82,9 +103,19 @@ export default function WardrobePage(): JSX.Element {
       gender: item.gender,
       occasion: item.occasion || "",
       styleVibe: item.styleVibe || "",
+      imageUrl: item.imageUrl || "",
     });
     setEditingItem(item);
     setShowForm(true);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    readFileAsDataURL(file).then((dataUrl) => {
+      setForm({ ...form, imageUrl: dataUrl });
+    });
   };
 
   const handleSave = () => {
@@ -100,6 +131,7 @@ export default function WardrobePage(): JSX.Element {
       gender: form.gender,
       occasion: form.occasion || undefined,
       styleVibe: form.styleVibe || undefined,
+      imageUrl: form.imageUrl || undefined,
       addedAt: editingItem?.addedAt ?? new Date().toISOString(),
     };
 
@@ -127,6 +159,33 @@ export default function WardrobePage(): JSX.Element {
 
   return (
     <main className="site-page">
+      {showTutorial && (
+        <div className="tutorial-overlay">
+          <div className="tutorial-card">
+            <h2>Welcome to Your Wardrobe</h2>
+            <div className="tutorial-steps">
+              <div className="tutorial-step">
+                <span className="tutorial-step__num">1</span>
+                <p><strong>Add Items</strong> &mdash; Click the <q>Add Item</q> button to log clothes you own.</p>
+              </div>
+              <div className="tutorial-step">
+                <span className="tutorial-step__num">2</span>
+                <p><strong>Upload a Photo</strong> &mdash; Take or upload a picture of each item for visual reference.</p>
+              </div>
+              <div className="tutorial-step">
+                <span className="tutorial-step__num">3</span>
+                <p><strong>Filter &amp; Manage</strong> &mdash; Use the category filter and edit/delete any item.</p>
+              </div>
+              <div className="tutorial-step">
+                <span className="tutorial-step__num">4</span>
+                <p><strong>Generate Looks</strong> &mdash; FitAura will prioritise your wardrobe when making outfit suggestions.</p>
+              </div>
+            </div>
+            <Button onClick={dismissTutorial} size="lg">Got it</Button>
+          </div>
+        </div>
+      )}
+
       <section className="hero-shell hero-shell--wardrobe">
         <Spotlight className="spotlight--left" fill="30, 64, 175" />
         <Spotlight className="spotlight--right" fill="236, 72, 153" delay={0.2} />
@@ -140,13 +199,19 @@ export default function WardrobePage(): JSX.Element {
             so recommendations work with what you have.
           </p>
           <div className="hero-actions">
-            <Button onClick={openAddForm} size="lg">
-              <Plus size={16} />
-              Add Item
-            </Button>
-            <Button asChild variant="secondary" size="lg">
-              <Link href="/upload">Generate Look</Link>
-            </Button>
+            <div className="tutorial-hint-wrapper">
+              <Button onClick={openAddForm} size="lg">
+                <Plus size={16} />
+                Add Item
+              </Button>
+              <span className="tutorial-hint">Add your first clothing piece here</span>
+            </div>
+            <div className="tutorial-hint-wrapper">
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/upload">Generate Look</Link>
+              </Button>
+              <span className="tutorial-hint">Use your wardrobe to create outfits</span>
+            </div>
           </div>
         </div>
       </section>
@@ -276,6 +341,30 @@ export default function WardrobePage(): JSX.Element {
                 </label>
               </div>
 
+              <div className="field">
+                <span>Item Photo (optional)</span>
+                <div className="wardrobe-image-upload">
+                  {form.imageUrl ? (
+                    <div className="wardrobe-image-preview">
+                      <img src={form.imageUrl} alt="Preview" />
+                      <Button variant="ghost" size="sm" onClick={() => setForm({ ...form, imageUrl: "" })}>
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="wardrobe-image-dropzone">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="sr-only-input"
+                      />
+                      <span>Click to upload a photo of this item</span>
+                    </label>
+                  )}
+                </div>
+              </div>
+
               <div className="below-card-actions">
                 <Button onClick={handleSave} disabled={!form.name.trim()}>
                   {editingItem ? "Update Item" : "Add to Wardrobe"}
@@ -299,10 +388,13 @@ export default function WardrobePage(): JSX.Element {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={openAddForm} size="lg">
-                <Plus size={16} />
-                Add Your First Item
-              </Button>
+              <div className="tutorial-hint-wrapper">
+                <Button onClick={openAddForm} size="lg">
+                  <Plus size={16} />
+                  Add Your First Item
+                </Button>
+                <span className="tutorial-hint">Start building your digital wardrobe</span>
+              </div>
             </CardContent>
           </Card>
         ) : (
@@ -322,11 +414,19 @@ export default function WardrobePage(): JSX.Element {
                   <CardContent className="wardrobe-list">
                     {items.map((item) => (
                       <div key={item.id} className="wardrobe-item">
-                        <div
-                          className="wardrobe-swatch"
-                          style={{ backgroundColor: item.color }}
-                          title={item.color}
-                        />
+                        {item.imageUrl ? (
+                          <img
+                            className="wardrobe-item__thumb"
+                            src={item.imageUrl}
+                            alt={item.name}
+                          />
+                        ) : (
+                          <div
+                            className="wardrobe-swatch"
+                            style={{ backgroundColor: item.color }}
+                            title={item.color}
+                          />
+                        )}
                         <div className="wardrobe-item__info">
                           <strong>{item.name}</strong>
                           <span>
