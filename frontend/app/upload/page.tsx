@@ -267,9 +267,12 @@ export default function UploadPage(): JSX.Element {
                     <Camera size={28} />
                     <strong>Drop your images here</strong>
                     <p>or select them manually (up to 3 photos)</p>
-                    <Button type="button" variant="secondary" onClick={triggerFileSelect}>
-                      Upload Photos
-                    </Button>
+                    <div className="tutorial-hint-wrapper" style={{ alignItems: "center" }}>
+                      <Button type="button" variant="secondary" onClick={triggerFileSelect}>
+                        Upload Photos
+                      </Button>
+                      <span className="tutorial-hint">Step 1: Choose your best photo</span>
+                    </div>
                   </div>
                 )}
                 <input
@@ -328,15 +331,21 @@ export default function UploadPage(): JSX.Element {
           </Card>
 
           <div className="below-card-actions">
-            <Button type="button" size="lg" onClick={handleGenerate} disabled={isGenerating || selectedFiles.length === 0}>
-              {isGenerating ? "Generating..." : "Generate Look"}
-            </Button>
-            <Button asChild variant="secondary" size="lg">
-              <Link href="/wardrobe">
-                <LayoutGrid size={16} />
-                My Wardrobe
-              </Link>
-            </Button>
+            <div className="tutorial-hint-wrapper">
+              <Button type="button" size="lg" onClick={handleGenerate} disabled={isGenerating || selectedFiles.length === 0}>
+                {isGenerating ? "Generating..." : "Generate Look"}
+              </Button>
+              <span className="tutorial-hint">Analyze your photo & get styled</span>
+            </div>
+            <div className="tutorial-hint-wrapper">
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/wardrobe">
+                  <LayoutGrid size={16} />
+                  My Wardrobe
+                </Link>
+              </Button>
+              <span className="tutorial-hint">Browse your saved clothes</span>
+            </div>
           </div>
         </SectionReveal>
 
