@@ -32,6 +32,7 @@ export default function RootLayout({
           <header className="site-header">
             <div className="site-header__inner">
               <Link href="/" className="site-brand">
+                <span className="site-brand__logo">✦</span>
                 FitAura
               </Link>
               <nav className="site-nav">
@@ -39,6 +40,11 @@ export default function RootLayout({
                 <Link href="/wardrobe">Wardrobe</Link>
                 <Link href="/result">Result</Link>
               </nav>
+              <div className="site-header__cta">
+                <Link href="/upload" className="site-header__cta-link">
+                  Get Started
+                </Link>
+              </div>
             </div>
           </header>
 
