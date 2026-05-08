@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import gsap from "gsap";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, Clock3, Image as ImageIcon, Palette, Sparkles, Wand2 } from "lucide-react";
+import { ArrowRight, Clock3, Image as ImageIcon, Palette, Sparkles, Wand2, Camera, Shirt, Eye, ChevronRight } from "lucide-react";
 import { BackgroundBeams } from "@/components/aceternity/background-beams";
 import { Spotlight } from "@/components/aceternity/spotlight";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +47,30 @@ const STATS = [
   { value: "3 layers", label: "AI + motion + UI" }
 ];
 
+const GUIDE_STEPS = [
+  {
+    icon: <Camera size={20} />,
+    title: "Upload a Photo",
+    desc: "Take or upload your selfie and pick an occasion & style.",
+    link: "/upload",
+    label: "Start here"
+  },
+  {
+    icon: <Shirt size={20} />,
+    title: "Add to Wardrobe",
+    desc: "Log clothes you already own for smarter recommendations.",
+    link: "/wardrobe",
+    label: "Manage items"
+  },
+  {
+    icon: <Eye size={20} />,
+    title: "View Results",
+    desc: "See your full outfit breakdown with color palette & tips.",
+    link: "/result",
+    label: "See results"
+  }
+];
+
 function formatSavedTime(timestamp?: string): string {
   if (!timestamp) {
     return "Saved recently";
@@ -70,6 +94,7 @@ export default function LandingPage(): JSX.Element {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const statsRef = useRef<HTMLDivElement | null>(null);
   const [recentLooks, setRecentLooks] = useState<StoredLookResult[]>([]);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     const context = gsap.context(() => {
@@ -95,7 +120,16 @@ export default function LandingPage(): JSX.Element {
 
   useEffect(() => {
     setRecentLooks(loadLookHistory().slice(0, 3));
+    const seen = localStorage.getItem("fitaura:guide-seen");
+    if (!seen) {
+      setShowGuide(true);
+    }
   }, []);
+
+  const dismissGuide = () => {
+    setShowGuide(false);
+    localStorage.setItem("fitaura:guide-seen", "true");
+  };
 
   const openSavedSession = (session: StoredLookResult) => {
     saveLookResult(session);
@@ -104,6 +138,31 @@ export default function LandingPage(): JSX.Element {
 
   return (
     <main className="site-page">
+      {showGuide && (
+        <div className="tutorial-overlay">
+          <div className="tutorial-card tutorial-card--wide">
+            <h2>Welcome to FitAura</h2>
+            <p className="tutorial-sub">Your AI personal stylist. Here is how it works:</p>
+            <div className="guide-grid">
+              {GUIDE_STEPS.map((step, i) => (
+                <div key={step.title} className="guide-card">
+                  <span className="guide-card__num">0{i + 1}</span>
+                  <div className="guide-card__icon">{step.icon}</div>
+                  <h3>{step.title}</h3>
+                  <p>{step.desc}</p>
+                  <Link href={step.link} className="guide-card__link" onClick={dismissGuide}>
+                    {step.label} <ChevronRight size={14} />
+                  </Link>
+                </div>
+              ))}
+            </div>
+            <Button onClick={dismissGuide} size="lg">
+              Start Exploring <ArrowRight size={16} />
+            </Button>
+          </div>
+        </div>
+      )}
+
       <section className="hero-shell hero-shell--landing">
         <Spotlight className="spotlight--left" fill="29, 78, 216" />
         <Spotlight className="spotlight--right" fill="13, 148, 136" delay={0.2} />
@@ -117,14 +176,20 @@ export default function LandingPage(): JSX.Element {
             color palette, and confidence coaching.
           </p>
           <div className="hero-actions">
-            <Button asChild size="lg">
-              <Link href="/upload">
-                Start Styling <ArrowRight size={16} />
-              </Link>
-            </Button>
-            <Button asChild variant="secondary" size="lg">
-              <Link href="/result">View Last Result</Link>
-            </Button>
+            <div className="tutorial-hint-wrapper">
+              <Button asChild size="lg">
+                <Link href="/upload">
+                  Start Styling <ArrowRight size={16} />
+                </Link>
+              </Button>
+              <span className="tutorial-hint tutorial-hint--primary">Upload your photo & get styled</span>
+            </div>
+            <div className="tutorial-hint-wrapper">
+              <Button asChild variant="secondary" size="lg">
+                <Link href="/result">View Last Result</Link>
+              </Button>
+              <span className="tutorial-hint">Reopen your last look</span>
+            </div>
           </div>
         </div>
 
@@ -146,8 +211,38 @@ export default function LandingPage(): JSX.Element {
 
       <SectionReveal className="content-section">
         <div className="section-top">
+          <Badge variant="secondary">Quick Start Guide</Badge>
+          <h2>Three simple steps to your perfect look</h2>
+        </div>
+        <div className="guide-grid">
+          {GUIDE_STEPS.map((step, i) => (
+            <motion.div key={step.title} whileHover={{ y: -6 }}>
+              <Card className="guide-card-alt">
+                <CardHeader>
+                  <div className="guide-card-alt__head">
+                    <span className="guide-card__num">{String(i + 1).padStart(2, "0")}</span>
+                    <div className="guide-card__icon">{step.icon}</div>
+                  </div>
+                  <CardTitle>{step.title}</CardTitle>
+                  <CardDescription>{step.desc}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href={step.link}>
+                      {step.label} <ChevronRight size={14} />
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+      </SectionReveal>
+
+      <SectionReveal className="content-section">
+        <div className="section-top">
           <Badge variant="secondary">Why FitAura</Badge>
-          <h2>Built with modern UI + animation libraries for a premium client experience</h2>
+          <h2>Built with modern AI + animation for a premium experience</h2>
         </div>
         <div className="feature-grid">
           {FEATURES.map((feature, index) => (
@@ -188,9 +283,12 @@ export default function LandingPage(): JSX.Element {
                     <Clock3 size={14} />
                     {formatSavedTime(session.createdAt)}
                   </p>
-                  <Button type="button" variant="secondary" onClick={() => openSavedSession(session)}>
-                    Open In Results
-                  </Button>
+                  <div className="tutorial-hint-wrapper">
+                    <Button type="button" variant="secondary" onClick={() => openSavedSession(session)}>
+                      Open In Results
+                    </Button>
+                    <span className="tutorial-hint">Revisit this saved look</span>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -202,9 +300,12 @@ export default function LandingPage(): JSX.Element {
               <CardDescription>Generate your first look and it will show up here for quick access.</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button asChild size="lg">
-                <Link href="/upload">Start Your First Session</Link>
-              </Button>
+              <div className="tutorial-hint-wrapper">
+                <Button asChild size="lg">
+                  <Link href="/upload">Start Your First Session</Link>
+                </Button>
+                <span className="tutorial-hint">Begin by uploading a photo</span>
+              </div>
             </CardContent>
           </Card>
         )}
