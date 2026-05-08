@@ -73,6 +73,7 @@ export interface WardrobeItem {
   gender: ClothingGender;
   occasion?: string;
   styleVibe?: string;
+  imageUrl?: string;
   addedAt: string;
 }
 
